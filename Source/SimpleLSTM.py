@@ -7,14 +7,14 @@ class SimpleLSTM:
     def __init__(
             self, n_classes = 1,
             embedding_matrix = None,
-            keep_prop = 0.8,
+            keep_prob = 0.8,
             batch_size = 16,
             use_gpu = False,
             seq_len = 200,
             n_words = 3000,
-            embed_size = 300
+            embed_size = 300,
     ):
-        self._keep_prob = keep_prop
+        self._keep_prob = keep_prob
         self._keep_prob_tensor = tf.placeholder(tf.float32, name = "keep_prob_tens")
         self._n_classes = n_classes
         self._seq_len = seq_len
@@ -88,7 +88,10 @@ class SimpleLSTM:
 
     def multiple_lstm_cells(self, n_units, n_layers):
         return tf.contrib.rnn.MultiRNNCell(
-            [tf.contrib.rnn.LSTMCell(num_units = n_units) for _ in range(n_layers)]
+            [tf.contrib.rnn.DropoutWrapper(
+                tf.contrib.rnn.LSTMCell(num_units = n_units),
+                output_keep_prob = self._keep_prob_tensor)
+            for _ in range(n_layers)]
         )
     # def multiple_lstm_layers(self, cell, x):
     #     output, final_states = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32)
@@ -105,7 +108,7 @@ class SimpleLSTM:
             a = tf.nn.relu(z)
             return a
 
-    def fit(self, X, y, num_epochs = 3, print_every = 1):
+    def fit(self, X, y, num_epochs = 3, print_every = 1, weight_save_path = None):
         # with self._g.as_default():
 
         self._sess = tf.Session()
@@ -113,7 +116,8 @@ class SimpleLSTM:
 
         iter = 0
 
-        for epoch in range(num_epochs):
+        for e in range(num_epochs):
+            print("Epoch " + str(e))
             state = self._sess.run(self._initial_state)
             # n_batches = X.shape[0] // batch_size
 
@@ -128,6 +132,7 @@ class SimpleLSTM:
                 feed_dict = {
                     self._X: X[idx, :],
                     self._y: y[idx],
+                    self._keep_prob_tensor: self._keep_prob,
                     self._initial_state: state
                 }
 
@@ -140,8 +145,9 @@ class SimpleLSTM:
 
                 iter += 1
 
-
-
+            if weight_save_path is not None:
+                save_path = self._saver.save(self._sess, save_path = weight_save_path)
+                print("Model's weights saved at %s" % save_path)
 
     def predict(self, X, return_proba = False):
         state = self._sess.run(self._initial_state)
@@ -154,6 +160,7 @@ class SimpleLSTM:
 
             feed_dict = {
                 self._X: X[idx, :],
+                self._keep_prob_tensor: 1.0,
                 self._initial_state: state
             }
             prob[idx, :] = self._sess.run(self._op, feed_dict = feed_dict)
