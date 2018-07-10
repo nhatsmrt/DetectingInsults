@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 import math
 
-class SimpleLSTM:
+class DeepRNN:
 
     def __init__(
             self, n_classes = 1,

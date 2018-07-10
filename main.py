@@ -3,7 +3,10 @@ import pandas as pd
 from pathlib import Path
 import re, os
 import nltk
-from Source import SimpleLSTM, accuracy
+from nltk.corpus import stopwords
+from Source import SimpleLSTM, accuracy, preprocess
+from sklearn.metrics import confusion_matrix
+
 
 ## DEFINE PATHS:
 path = Path()
@@ -12,6 +15,9 @@ data_path = str(d) + "/Data/"
 train_path = data_path + "train.csv"
 test_path = data_path + "test_with_solutions.csv"
 glove_path = os.path.join(data_path, "glove.6B.50d.txt")
+weight_save_path = str(d) + "/weights/model.ckpt"
+# weight_load_path = str(d) + "/weights/1/model.ckpt"
+
 
 # LOAD GLOVE WEIGHTS
 ## Adapt from https://damienpontifex.com/2017/10/27/using-pre-trained-glove-embeddings-in-tensorflow/
@@ -41,29 +47,17 @@ embedding_weights = np.asarray(embedding_weights, dtype = np.float32)
 VOCAB_SIZE = embedding_weights.shape[0]
 
 ## READ AND PREPROCESS DATA:
+stopwords_list = set(stopwords.words('english'))
 df_train = pd.read_csv(train_path)
 y_train = df_train["Insult"].values.reshape(-1, 1)
 X_train_raw = df_train["Comment"].values
-seq_len = 4200
-X_train = np.zeros((len(X_train_raw), seq_len), dtype = np.int32)
-for ind in range(X_train_raw.shape[0]):
-    word_array = re.sub(r'[^\w]', ' ', X_train_raw[ind]).split()
-    # for word in word_array:
-    #     word = nltk.word_tokenize(word)
-    word_array = [word2idx.get(word, UNKNOWN_TOKEN) for word in word_array]
-    X_train[ind, -len(word_array):] = np.array(word_array).astype(np.int32)
+seq_len = 2500
+X_train = preprocess(X_train_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
 
 df_test = pd.read_csv(test_path)
 y_test = df_test["Insult"].values.reshape(-1, 1)
 X_test_raw = df_test["Comment"].values
-X_test = np.zeros((len(X_test_raw), seq_len), dtype = np.int32)
-for ind in range(X_test_raw.shape[0]):
-    word_array = re.sub(r'[^\w]', ' ', X_test_raw[ind]).split()
-    # for word in word_array:
-    #     word = nltk.word_tokenize(word)
-    word_array = [word2idx.get(word, UNKNOWN_TOKEN) for word in word_array]
-    X_test[ind, -len(word_array):] = np.array(word_array).astype(np.int32)
-
+X_test = preprocess(X_test_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
 
 ## DEFINE AND TRAIN MODEL:
 model = SimpleLSTM(
@@ -71,9 +65,10 @@ model = SimpleLSTM(
     embedding_matrix = embedding_weights,
     embed_size = EMBEDDING_DIMENSION)
 
-model.fit(X_train, y_train, num_epochs = 1)
+model.fit(X_train, y_train, num_epochs = 0, weight_save_path = None, weight_load_path = weight_save_path)
 
 ## TEST MODEL PERFORMANCE:
 predictions = model.predict(X_test)
 print("Test Accuracy:")
 print(accuracy(predictions, y_test))
+print(confusion_matrix(y_true = y_test.reshape(y_test.shape[0]), y_pred = predictions.reshape(predictions.shape[0])))

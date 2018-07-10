@@ -1,2 +1,2 @@
 from .SimpleLSTM import SimpleLSTM
-from .util import accuracy
+from .util import accuracy, preprocess
