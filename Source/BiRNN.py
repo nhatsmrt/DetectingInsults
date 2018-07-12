@@ -1,8 +1,9 @@
 import numpy as np
 import tensorflow as tf
 import math
+from .SimpleRNN import SimpleRNN
 
-class SimpleLSTM:
+class BiRNN(SimpleRNN):
 
     def __init__(
             self, n_classes = 1,
@@ -44,6 +45,8 @@ class SimpleLSTM:
     def create_network(self):
         self._X = tf.placeholder(shape = [None, self._seq_len], dtype = tf.int32)
         self._batch_size = tf.placeholder(shape = [], dtype = tf.int32)
+        self._is_training = tf.placeholder(tf.bool)
+
 
 
         # Embedding layer:
@@ -61,17 +64,23 @@ class SimpleLSTM:
 
         # LSTM Layer:
         # self._cell = self.multiple_lstm_cells(n_units = 512, n_layers = 3)
-        self._cell = self.multiple_lstm_cells(n_units = 128, n_cells = 1)
-        self._initial_state = self._cell.zero_state(batch_size = self._batch_size, dtype = tf.float32)
-        self._lstm_op, self._final_state = tf.nn.dynamic_rnn(
-            cell = self._cell,
+        self._cell_fw = self.multiple_gru_cells(n_units = 128, n_cells = 1)
+        self._cell_bw = self.multiple_gru_cells(n_units = 128, n_cells = 1)
+        self._initial_state_fw = self._cell_fw.zero_state(batch_size = self._batch_size, dtype = tf.float32)
+        self._initial_state_bw = self._cell_fw.zero_state(batch_size = self._batch_size, dtype = tf.float32)
+        self._lstm_op, self._final_states = tf.nn.bidirectional_dynamic_rnn(
+            cell_fw = self._cell_fw,
+            cell_bw = self._cell_bw,
             inputs = self._X_embed,
             dtype = tf.float32,
-            initial_state = self._initial_state)
-        self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op[:, -1]), (self._batch_size, -1))
+            initial_state_fw = self._initial_state_fw,
+            initial_state_bw = self._initial_state_bw)
+        self._lstm_op_concat = tf.concat(self._lstm_op, 2)
+        self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op_concat[:, -1]), (self._batch_size, -1))
 
         # Final feedforward layer and output:
-        self._fc = self.feedforward_layer(self._lstm_op_reshape, n_inp = 128, n_op = self._n_classes, final_layer = True, name = "fc")
+        self._fc1 = self.feedforward_layer(self._lstm_op_reshape, n_inp = 256, n_op = 512,  name = "fc1")
+        self._fc = self.feedforward_layer(self._fc1, n_inp = 512, n_op = self._n_classes, final_layer = True, name = "fc")
         self._op = tf.nn.sigmoid(self._fc)
 
         self._y = tf.placeholder(name = "y", shape = [None, 1], dtype = tf.float32)
@@ -84,28 +93,6 @@ class SimpleLSTM:
         self._train_step = self._optimizer.minimize(self._mean_loss)
 
 
-
-    def multiple_lstm_cells(self, n_units, n_cells):
-        return tf.contrib.rnn.MultiRNNCell(
-            [tf.contrib.rnn.DropoutWrapper(
-                tf.contrib.rnn.LSTMCell(num_units = n_units),
-                output_keep_prob = self._keep_prob_tensor)
-            for _ in range(n_cells)]
-        )
-    # def multiple_lstm_layers(self, cell, x):
-    #     output, final_states = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32)
-    #     return output, final_states
-
-    def feedforward_layer(self, x, n_inp, n_op, name, final_layer = False):
-        W = tf.get_variable(name = "W_" + name, shape = [n_inp, n_op])
-        b = tf.get_variable(name = "b_" + name, shape = [n_op])
-        z = tf.matmul(x, W) + b
-
-        if final_layer:
-            return z
-        else:
-            a = tf.nn.relu(z)
-            return a
 
     def fit(self, X, y, num_epochs = 3, print_every = 1, weight_save_path = None, weight_load_path = None, batch_size = 16):
         # with self._g.as_default():
@@ -121,7 +108,9 @@ class SimpleLSTM:
 
         for e in range(num_epochs):
             print("Epoch " + str(e))
-            state = self._sess.run(self._initial_state, feed_dict = {self._batch_size: batch_size})
+            state_fw = self._sess.run(self._initial_state_fw, feed_dict = {self._batch_size: batch_size})
+            state_bw = self._sess.run(self._initial_state_bw, feed_dict = {self._batch_size: batch_size})
+
             # n_batches = X.shape[0] // batch_size
 
             train_indicies = np.arange(X.shape[0])
@@ -137,12 +126,17 @@ class SimpleLSTM:
                     self._y: y[idx],
                     self._keep_prob_tensor: self._keep_prob,
                     self._batch_size: actual_batch_size,
-                    self._initial_state: state
+                    self._is_training: True,
+                    self._initial_state_fw: state_fw,
+                    self._initial_state_bw: state_bw
+
                 }
 
-                _, loss, acc, state = self._sess.run(
-                    [self._train_step, self._mean_loss, self._accuracy, self._final_state],
+                _, loss, acc, states = self._sess.run(
+                    [self._train_step, self._mean_loss, self._accuracy, self._final_states],
                     feed_dict = feed_dict)
+                state_fw = states[0]
+                state_bw = states[1]
 
                 if iter % print_every == 0:
                     print("Iteration " + str(iter) + " with loss " + str(loss) + " and accuracy " + str(acc))
@@ -157,7 +151,8 @@ class SimpleLSTM:
         if batch_size is None:
             batch_size = X.shape[0]
 
-        state = self._sess.run(self._initial_state, feed_dict = {self._batch_size: batch_size})
+        state_fw = self._sess.run(self._initial_state_fw, feed_dict={self._batch_size: batch_size})
+        state_bw = self._sess.run(self._initial_state_bw, feed_dict={self._batch_size: batch_size})
         train_indicies = np.arange(X.shape[0])
         prob = np.zeros((X.shape[0], 1), dtype = np.float32)
 
@@ -172,7 +167,9 @@ class SimpleLSTM:
                 self._X: X[idx, :],
                 self._keep_prob_tensor: 1.0,
                 self._batch_size: actual_batch_size,
-                self._initial_state: state
+                self._initial_state_fw: state_fw,
+                self._initial_state_bw: state_bw,
+                self._is_training: False
             }
             prob[idx, :] = self._sess.run(self._op, feed_dict = feed_dict)
 
@@ -182,9 +179,4 @@ class SimpleLSTM:
         return np.round(prob)
 
 
-    # Adapt from Sebastian Rashka's code
-    def generate_batch(self, X, y = None, batch_size = 1):
-        n_batches = X.shape[0] // batch_size
-
-        return
 

@@ -2,12 +2,12 @@ import numpy as np
 import tensorflow as tf
 import math
 
-class DeepRNN:
+class SimpleRNN:
 
     def __init__(
             self, n_classes = 1,
             embedding_matrix = None,
-            keep_prob = 0.8,
+            keep_prob = 0.5,
             use_gpu = False,
             seq_len = 200,
             n_words = 3000,
@@ -44,6 +44,7 @@ class DeepRNN:
     def create_network(self):
         self._X = tf.placeholder(shape = [None, self._seq_len], dtype = tf.int32)
         self._batch_size = tf.placeholder(shape = [], dtype = tf.int32)
+        self._is_training = tf.placeholder(tf.bool)
 
 
         # Embedding layer:
@@ -61,7 +62,7 @@ class DeepRNN:
 
         # LSTM Layer:
         # self._cell = self.multiple_lstm_cells(n_units = 512, n_layers = 3)
-        self._cell = self.multiple_lstm_cells(n_units = 128, n_cells = 1)
+        self._cell = self.multiple_gru_cells(n_units = 128, n_cells = 1)
         self._initial_state = self._cell.zero_state(batch_size = self._batch_size, dtype = tf.float32)
         self._lstm_op, self._final_state = tf.nn.dynamic_rnn(
             cell = self._cell,
@@ -71,7 +72,8 @@ class DeepRNN:
         self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op[:, -1]), (self._batch_size, -1))
 
         # Final feedforward layer and output:
-        self._fc = self.feedforward_layer(self._lstm_op_reshape, n_inp = 128, n_op = self._n_classes, final_layer = True, name = "fc")
+        self._fc1 = self.feedforward_layer(self._lstm_op_reshape, n_inp = 128, n_op = 256,  name = "fc1")
+        self._fc = self.feedforward_layer(self._fc1, n_inp = 256, n_op = self._n_classes, final_layer = True, name = "fc")
         self._op = tf.nn.sigmoid(self._fc)
 
         self._y = tf.placeholder(name = "y", shape = [None, 1], dtype = tf.float32)
@@ -92,6 +94,15 @@ class DeepRNN:
                 output_keep_prob = self._keep_prob_tensor)
             for _ in range(n_cells)]
         )
+
+    def multiple_gru_cells(self, n_units, n_cells):
+        return tf.contrib.rnn.MultiRNNCell(
+            [tf.contrib.rnn.DropoutWrapper(
+                tf.contrib.rnn.GRUCell(num_units = n_units),
+                output_keep_prob = self._keep_prob_tensor)
+            for _ in range(n_cells)]
+        )
+
     # def multiple_lstm_layers(self, cell, x):
     #     output, final_states = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32)
     #     return output, final_states
@@ -105,7 +116,8 @@ class DeepRNN:
             return z
         else:
             a = tf.nn.relu(z)
-            return a
+            h = tf.layers.batch_normalization(a, training = self._is_training)
+            return h
 
     def fit(self, X, y, num_epochs = 3, print_every = 1, weight_save_path = None, weight_load_path = None, batch_size = 16):
         # with self._g.as_default():
@@ -136,6 +148,7 @@ class DeepRNN:
                     self._X: X[idx, :],
                     self._y: y[idx],
                     self._keep_prob_tensor: self._keep_prob,
+                    self._is_training: True,
                     self._batch_size: actual_batch_size,
                     self._initial_state: state
                 }
@@ -172,6 +185,7 @@ class DeepRNN:
                 self._X: X[idx, :],
                 self._keep_prob_tensor: 1.0,
                 self._batch_size: actual_batch_size,
+                self._is_training: False,
                 self._initial_state: state
             }
             prob[idx, :] = self._sess.run(self._op, feed_dict = feed_dict)
