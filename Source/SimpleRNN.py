@@ -72,8 +72,8 @@ class SimpleRNN:
         self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op[:, -1]), (self._batch_size, -1))
 
         # Final feedforward layer and output:
-        self._fc1 = self.feedforward_layer(self._lstm_op_reshape, n_inp = 128, n_op = 256,  name = "fc1")
-        self._fc = self.feedforward_layer(self._fc1, n_inp = 256, n_op = self._n_classes, final_layer = True, name = "fc")
+        # self._fc1 = self.feedforward_layer(self._lstm_op_reshape, n_inp = 128, n_op = 256,  name = "fc1")
+        self._fc = self.feedforward_layer(self._lstm_op_reshape, n_inp = 128, n_op = self._n_classes, final_layer = True, name = "fc")
         self._op = tf.nn.sigmoid(self._fc)
 
         self._y = tf.placeholder(name = "y", shape = [None, 1], dtype = tf.float32)
@@ -116,8 +116,8 @@ class SimpleRNN:
             return z
         else:
             a = tf.nn.relu(z)
-            h = tf.layers.batch_normalization(a, training = self._is_training)
-            return h
+            # h = tf.layers.batch_normalization(a, training = self._is_training)
+            return a
 
     def fit(self, X, y, num_epochs = 3, print_every = 1, weight_save_path = None, weight_load_path = None, batch_size = 16):
         # with self._g.as_default():

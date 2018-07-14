@@ -16,10 +16,11 @@ d = path.resolve()
 data_path = str(d) + "/Data/"
 train_path = data_path + "train.csv"
 test_path = data_path + "test_with_solutions.csv"
-glove_path = os.path.join(data_path, "glove.6B.100d.txt")
-weight_save_path = str(d) + "/weights/model_stacked_bilstm.ckpt"
-# weight_load_path = str(d) + "/weights/1/model.ckpt"
-
+glove_path = os.path.join(data_path, "glove.6B.50d.txt")
+weight_save_path = str(d) + "/weights/model_stacked_birnn.ckpt"
+# weight_load_path = str(d) + "/weights/model_stacked_birnn.ckpt"
+weight_load_path = None
+augment_path = data_path + "/augmented_data.csv"
 
 # LOAD GLOVE WEIGHTS
 ## Adapt from https://damienpontifex.com/2017/10/27/using-pre-trained-glove-embeddings-in-tensorflow/
@@ -61,25 +62,43 @@ embedding_weights = np.asarray(embedding_weights, dtype = np.float32)
 VOCAB_SIZE = embedding_weights.shape[0]
 
 ## READ AND PREPROCESS DATA:
-stopwords_list = set(stopwords.words('english'))
+### Read csv files into pd dataframes:
 df_train = pd.read_csv(train_path)
-y_train = df_train["Insult"].values.reshape(-1, 1)
-X_train_raw = df_train["Comment"].values
-seq_len = 2500
-X_train = preprocess(X_train_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
-
+df_augmented = pd.read_csv(augment_path)
 df_test = pd.read_csv(test_path)
+
+stopwords_list = set(stopwords.words('english'))
+y_train = df_train["Insult"].values.reshape(-1, 1)
+y_train_augmented = np.append(
+    y_train,
+    df_augmented["Insult"].values.reshape(-1, 1),
+    axis = 0)
+X_train_raw = df_train["Comment"].values
+X_train_augmented_raw = np.append(
+    X_train_raw,
+    df_augmented["Comment"].values,
+    axis = 0
+)
+seq_len = 2522
+X_train = preprocess(X_train_augmented_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
+
 y_test = df_test["Insult"].values.reshape(-1, 1)
 X_test_raw = df_test["Comment"].values
 X_test = preprocess(X_test_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
 
 ## DEFINE AND TRAIN MODEL:
-model = SimpleRNN(
+model = StackedBiRNN(
+    keep_prob = 0.5,
     seq_len = seq_len,
     embedding_matrix = embedding_weights,
     embed_size = EMBEDDING_DIMENSION)
 
-model.fit(X_train, y_train, num_epochs = 5, weight_save_path = weight_save_path, weight_load_path = None)
+model.fit(
+    X_train,
+    y_train_augmented,
+    num_epochs = 5,
+    weight_save_path = weight_save_path,
+    weight_load_path = weight_load_path)
 
 ## TEST MODEL PERFORMANCE:
 predictions = model.predict(X_test)
