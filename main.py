@@ -96,12 +96,12 @@ model = StackedBiRNN(
 model.fit(
     X_train,
     y_train_augmented,
-    num_epochs = 5,
+    num_epochs = 0,
     weight_save_path = weight_save_path,
-    weight_load_path = weight_load_path)
+    weight_load_path = weight_save_path)
 
 ## TEST MODEL PERFORMANCE:
-predictions = model.predict(X_test)
+predictions = model.predict(X_test, threshold = 0.5)
 print("Test Accuracy:")
 print(accuracy(predictions, y_test))
 print(confusion_matrix(
