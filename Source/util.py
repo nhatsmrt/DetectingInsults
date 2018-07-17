@@ -8,13 +8,9 @@ def accuracy(predictions, target):
     return np.mean(np.equal(predictions, target).astype(np.float32))
 
 def decontract(str):
-    # ret = str.replace("'re ", " are ")
-    # ret = ret.replace("'RE ", " ARE ")
     ret = re.sub(r'\'re[ .?!,:;]', lambda x: " are" + x.group(0)[3:], str)
     ret = re.sub(r'\'RE[ .?!,:;]', lambda x: " ARE" + x.group(0)[3:], ret)
 
-    # ret = ret.replace("'m ", " am ")
-    # ret = ret.replace("'M ", " AM ")
     ret = re.sub(r'\'m[ .?!,:;]', lambda x: " am" + x.group(0)[2:], ret)
     ret = re.sub(r'\'M[ .?!,:;]', lambda x: " AM" + x.group(0)[2:], ret)
 
@@ -28,24 +24,16 @@ def decontract(str):
 
 
 
-    # ret = ret.replace("'ve ", " have ")
-    # ret = ret.replace("'VE ", " HAVE ")
     ret = re.sub(r'\'ve[ .?!,:;]', lambda x: " have" + x.group(0)[3:], ret)
     ret = re.sub(r'\'VE[ .?!,:;]', lambda x: " HAVE" + x.group(0)[3:], ret)
 
 
-    # ret = ret.replace("'ll ", " will ")
-    # ret = ret.replace("'LL ", " WILL ")
     ret = re.sub(r'\'ll[ .?!,:;]', lambda x: " will" + x.group(0)[3:], ret)
     ret = re.sub(r'\'LL[ .?!,:;]', lambda x: " WILL" + x.group(0)[3:], ret)
 
 
-    # ret = ret.replace("'s ", " 's ")
-    # ret = ret.replace("'S ", " 'S ")
     ret = re.sub(r'\'s[ .?!,:;]', lambda x: " 's " + x.group(0)[2:], ret)
     ret = re.sub(r'\'S[ .?!,:;]', lambda x: " 'S " + x.group(0)[2:], ret)
-    # ret = re.sub(r'\'s[ .?!,:;]', lambda x: " <apos> " + x.group(0)[2:], ret)
-    # ret = re.sub(r'\'S[ .?!,:;]', lambda x: " <upp> <apos> " + x.group(0)[2:], ret)
 
     ret = re.sub(r'\'d[ .?!,:;]', lambda x: " 'd " + x.group(0)[2:], ret)
     ret = re.sub(r'\'D[ .?!,:;]', lambda x: " 'D " + x.group(0)[2:], ret)
@@ -62,12 +50,13 @@ def preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, stopwords_list = None):
         X_raw[ind] = re.sub(r'[\\][tnrfv]', ' ', X_raw[ind]).lower()
         X_raw[ind] = re.sub(r'[\\]xa0', ' ', X_raw[ind])
         X_raw[ind] = re.sub(r'[\\]+[^\w]', ' ', X_raw[ind])
+        # X_raw[ind] = re.sub(r'(\.\.\.)|[.,?!:;=-]', lambda x: " " + x.group(0) + " ", X_raw[ind])
         X_raw[ind] = re.sub(r' +', ' ', X_raw[ind])
         X_raw[ind] = decontract(X_raw[ind])
         X_raw[ind] = re.sub(r' [A-Z]{2,}', lambda x: " <upp>" + x.group(0), X_raw[ind])
         X_raw[ind] = re.sub(r'[^a-zA-Z][0-9]+', lambda x: " <num>", X_raw[ind])
-        X_raw[ind] = re.sub(r'[^\w \'<>\\]', lambda x: " " + x.group(0) + " ", X_raw[ind])
         word_array = re.sub(r'[^\w \'<>]', '', X_raw[ind]).lower().split()
+        # word_array = re.sub(r'[^\w \'<>.,?!:;=-]', '', X_raw[ind]).lower().split()
         if stopwords_list is not None:
             word_array = [word for word in word_array if word not in stopwords_list]
         # print(word_array)
@@ -75,14 +64,16 @@ def preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, stopwords_list = None):
         #     print(ind)
         if len(word_array) > 0:
             word_array = [word2idx.get(word, UNKNOWN_TOKEN) for word in word_array]
-            X[ind, -len(word_array):] = np.array(word_array).astype(np.int32)
+            if len(word_array) <= seq_len:
+                X[ind, -len(word_array):] = np.array(word_array).astype(np.int32)
+            else:
+                X[ind, :] = np.array(word_array).astype(np.int32)[0:seq_len]
 
     return X
 
 def translationAugmentYandex(X, y, key, export_path, begin = 0):
     n_negative = np.sum(y)
     X_ret = []
-    y_ret = np.ones(shape = (n_negative * 2))
     n_sentences_processed = 0
     for ind in range(X.shape[0]):
         if y[ind] == 1:
@@ -92,6 +83,7 @@ def translationAugmentYandex(X, y, key, export_path, begin = 0):
                     en = re.sub(r'[\\]xa0', ' ', en)
                     en = re.sub(r'[\\]+[^\w]', '', en)
                     en = re.sub(r'[^\w \'\\]', lambda x: " " + x.group(0) + " ", en)
+                    # en = re.sub(r'[.,?!:;=-]', lambda x: " " + x.group(0) + " ", en)
                     en = re.sub(r' +', ' ', en)
                     en = re.sub(r'[^\w \'<>]', '', en)
 
@@ -127,6 +119,7 @@ def translationAugmentYandex(X, y, key, export_path, begin = 0):
             else:
                 n_sentences_processed += 1
 
+    y_ret = np.ones(shape = ((n_sentences_processed - begin) * 2))
     d = {"Comment": np.array(X_ret), "Insult": y_ret}
     df = pd.DataFrame(data = d)
     df.to_csv(path_or_buf = export_path)

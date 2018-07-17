@@ -94,7 +94,14 @@ class BiRNN(SimpleRNN):
 
 
 
-    def fit(self, X, y, num_epochs = 3, print_every = 1, weight_save_path = None, weight_load_path = None, batch_size = 16):
+    def fit(
+            self, X, y, X_val, y_val,
+            num_epochs = 3,
+            print_every = 1,
+            weight_save_path = None,
+            weight_load_path = None,
+            batch_size = 16,
+            patience = 3):
         # with self._g.as_default():
 
         self._sess = tf.Session()
@@ -106,8 +113,10 @@ class BiRNN(SimpleRNN):
             self._saver.restore(self._sess, save_path = weight_load_path)
             print("Weights loaded successfully.")
 
+        cur_val_loss = 1000
+        p = 0
         for e in range(num_epochs):
-            print("Epoch " + str(e))
+            print("Epoch " + str(e + 1))
             state_fw = self._sess.run(self._initial_state_fw, feed_dict = {self._batch_size: batch_size})
             state_bw = self._sess.run(self._initial_state_bw, feed_dict = {self._batch_size: batch_size})
 
@@ -143,11 +152,39 @@ class BiRNN(SimpleRNN):
 
                 iter += 1
 
-            if weight_save_path is not None:
-                save_path = self._saver.save(self._sess, save_path = weight_save_path)
-                print("Model's weights saved at %s" % save_path)
+            # Validation:
+            if X_val is not None:
+                state_fw = self._sess.run(self._initial_state_fw, feed_dict = {self._batch_size: X_val.shape[0]})
+                state_bw = self._sess.run(self._initial_state_bw, feed_dict = {self._batch_size: X_val.shape[0]})
+                feed_dict_val = {
+                    self._X: X_val,
+                    self._y: y_val,
+                    self._keep_prob_tensor: 1.0,
+                    self._is_training: False,
+                    self._batch_size: X_val.shape[0],
+                    self._initial_state_fw: state_fw,
+                    self._initial_state_bw: state_bw
+                }
+                val_loss = self._sess.run(self._mean_loss, feed_dict = feed_dict_val)
+                print("Validation loss: " + str(val_loss))
 
-    def predict(self, X, return_proba = False, batch_size = 32):
+                if val_loss < cur_val_loss:
+                    cur_val_loss = val_loss
+                    print("Validation loss decreases.")
+                    if weight_save_path is not None:
+                        save_path = self._saver.save(self._sess, save_path = weight_save_path)
+                        print("Model's weights saved at %s" % save_path)
+                    p = 0
+                else:
+                    p += 1
+                    if p > patience:
+                        return
+            else:
+                if weight_save_path is not None:
+                    save_path = self._saver.save(self._sess, save_path=weight_save_path)
+                    print("Model's weights saved at %s" % save_path)
+
+    def predict(self, X, return_proba = False, threshold = 0.5, batch_size = 32):
         if batch_size is None:
             batch_size = X.shape[0]
 
@@ -176,7 +213,7 @@ class BiRNN(SimpleRNN):
         if return_proba:
             return prob
 
-        return np.round(prob)
+        return (prob > threshold).astype(np.int32)
 
 
 
