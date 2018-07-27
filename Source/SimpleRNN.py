@@ -143,14 +143,14 @@ class SimpleRNN:
         p = 0
         for e in range(num_epochs):
             print("Epoch " + str(e + 1))
-            state = self._sess.run(self._initial_state, feed_dict = {self._batch_size: batch_size})
+            # state = self._sess.run(self._initial_state, feed_dict = {self._batch_size: batch_size})
             # n_batches = X.shape[0] // batch_size
 
             train_indicies = np.arange(X.shape[0])
             np.random.shuffle(train_indicies)
 
             for i in range(int(math.ceil(X.shape[0] // batch_size))):
-                # state = self._sess.run(self._initial_state, feed_dict={self._batch_size: batch_size})
+                state = self._sess.run(self._initial_state, feed_dict={self._batch_size: batch_size})
                 start_idx = (i * batch_size) % X.shape[0]
                 idx = train_indicies[start_idx:start_idx + batch_size]
 
