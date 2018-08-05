@@ -71,7 +71,7 @@ class AttentionalRNN(SimpleRNN):
         self._attention = self.attention_module(
             self._lstm_op,
             n_units = 128,
-            op_size = 64,
+            context_dim = 64,
             name = "attention"
         )
         self._fc = self.feedforward_layer(self._attention, n_inp = 128, n_op = self._n_classes, final_layer = True, name = "fc")
@@ -86,14 +86,14 @@ class AttentionalRNN(SimpleRNN):
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
 
-    def attention_module(self, hidden_states, name, n_units, op_size):
-        W = tf.get_variable(name = "W_" + name, shape = [n_units, op_size])
-        b = tf.get_variable(name = "b_" + name, shape = [op_size])
+    def attention_module(self, hidden_states, name, n_units, context_dim):
+        W = tf.get_variable(name = "W_" + name, shape = [n_units, context_dim])
+        b = tf.get_variable(name = "b_" + name, shape = [context_dim])
 
         hidden_states_reshaped = tf.reshape(hidden_states, shape = [-1, n_units])
         rep = tf.tanh(tf.matmul(hidden_states_reshaped, W) + b)
 
-        context = tf.get_variable(name = "cont_" + name, shape = [op_size, 1])
+        context = tf.get_variable(name = "cont_" + name, shape = [context_dim, 1])
         score = tf.nn.softmax(
             tf.reshape(tf.matmul(rep, context), (-1, self._seq_len)),
             axis = -1

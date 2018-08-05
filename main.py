@@ -5,9 +5,9 @@ import re, os
 import nltk
 from nltk.corpus import stopwords
 from Source import\
-    SimpleRNN, BiRNN, StackedBiRNN, \
+    SimpleRNN, BiRNN, StackedBiRNN, RNNKeras, AttentionalRNN, AttentionalBiRNN, \
     accuracy, preprocess
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.model_selection import train_test_split
 
 
@@ -18,7 +18,7 @@ data_path = str(d) + "/Data/"
 train_path = data_path + "train.csv"
 test_path = data_path + "test_with_solutions.csv"
 glove_path = os.path.join(data_path, "glove.6B.50d.txt")
-weight_save_path = str(d) + "/weights/model_stacked_birnn.ckpt"
+weight_save_path = str(d) + "/weights/model_attentional_rnn.ckpt"
 # weight_load_path = str(d) + "/weights/model_stacked_birnn.ckpt"
 weight_load_path = None
 augment_path = data_path + "/augmented_data_yandex_0.csv"
@@ -73,7 +73,8 @@ y = df_train["Insult"].values.reshape(-1, 1)
 y_augmented = np.append(
     y,
     df_augmented["Insult"].values.reshape(-1, 1),
-    axis = 0)
+    axis = 0
+)
 X_raw = df_train["Comment"].values
 X_augmented_raw = np.append(
     X_raw,
@@ -86,23 +87,27 @@ X_train, X_val, y_train, y_val = train_test_split(
     X_raw,
     y_augmented,
     train_size = 0.9,
-    random_state = RANDOM_STATE)
+    random_state = RANDOM_STATE
+)
 
 ## DEFINE AND TRAIN MODEL:
-model = BiRNN(
+model = AttentionalBiRNN(
     keep_prob = 0.5,
     seq_len = seq_len,
     embedding_matrix = embedding_weights,
-    embed_size = EMBEDDING_DIMENSION)
+    embed_size = EMBEDDING_DIMENSION
+)
 
 model.fit(
     X_train,
     y_train,
     X_val,
     y_val,
-    num_epochs = 5,
+    num_epochs = 10,
     weight_save_path = weight_save_path,
-    weight_load_path = None)
+    weight_load_path = None
+)
+
 
 ## VALIDATE MODEL PERFORMANCE:
 predictions = model.predict(X_val)
@@ -110,4 +115,10 @@ print("Final Validation Accuracy:")
 print(accuracy(predictions, y_val))
 print(confusion_matrix(
     y_true = y_val.reshape(y_val.shape[0]),
-    y_pred = predictions.reshape(predictions.shape[0])))
+    y_pred = predictions.reshape(predictions.shape[0]))
+)
+print(roc_auc_score(
+    y_true = y_val.reshape(y_val.shape[0]),
+    y_score = predictions.reshape(predictions.shape[0]))
+)
+

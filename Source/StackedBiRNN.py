@@ -119,8 +119,8 @@ class StackedBiRNN(SimpleRNN):
 
         for e in range(num_epochs):
             print("Epoch " + str(e + 1))
-            states_fw = self._sess.run(self._initial_states_fw, feed_dict = {self._batch_size: batch_size})
-            states_bw = self._sess.run(self._initial_states_bw, feed_dict = {self._batch_size: batch_size})
+            # states_fw = self._sess.run(self._initial_states_fw, feed_dict = {self._batch_size: batch_size})
+            # states_bw = self._sess.run(self._initial_states_bw, feed_dict = {self._batch_size: batch_size})
 
             # n_batches = X.shape[0] // batch_size
 
@@ -130,8 +130,11 @@ class StackedBiRNN(SimpleRNN):
             for i in range(int(math.ceil(X.shape[0] // batch_size))):
                 start_idx = (i * batch_size) % X.shape[0]
                 idx = train_indicies[start_idx:start_idx + batch_size]
-
                 actual_batch_size = y[idx].shape[0]
+
+                states_fw = self._sess.run(self._initial_states_fw, feed_dict={self._batch_size: actual_batch_size})
+                states_bw = self._sess.run(self._initial_states_bw, feed_dict={self._batch_size: actual_batch_size})
+
                 feed_dict = {
                     self._X: X[idx, :],
                     self._y: y[idx],

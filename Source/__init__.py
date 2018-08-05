@@ -3,4 +3,5 @@ from .BiRNN import BiRNN
 from .StackedBiRNN import StackedBiRNN
 from .DeepRNNKeras import RNNKeras
 from .AttentionalRNN import AttentionalRNN
+from .AttentionalBiRNN import AttentionalBiRNN
 from .util import accuracy, preprocess, decontract
