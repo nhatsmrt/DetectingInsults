@@ -5,7 +5,7 @@ from .BiRNN import BiRNN
 
 class AttentionalBiRNN(BiRNN, AttentionalRNN):
     def __init__(
-            self, n_classes = 1,
+            self, n_classes = 2,
             embedding_matrix = None,
             keep_prob = 0.5,
             use_gpu = False,
@@ -69,7 +69,7 @@ class AttentionalBiRNN(BiRNN, AttentionalRNN):
         )
         self._fc = self.feedforward_layer(
             self._attention, n_inp = 256,
-            n_op = self._n_classes,
+            n_op = 1,
             final_layer = True,
             name = "fc"
         )

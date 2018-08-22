@@ -6,7 +6,7 @@ from .SimpleRNN import SimpleRNN
 class AttentionalRNN(SimpleRNN):
 
     def __init__(
-            self, n_classes = 1,
+            self, n_classes = 2,
             embedding_matrix = None,
             keep_prob = 0.5,
             use_gpu = False,
@@ -74,7 +74,7 @@ class AttentionalRNN(SimpleRNN):
             context_dim = 64,
             name = "attention"
         )
-        self._fc = self.feedforward_layer(self._attention, n_inp = 128, n_op = self._n_classes, final_layer = True, name = "fc")
+        self._fc = self.feedforward_layer(self._attention, n_inp = 128, n_op = 1, final_layer = True, name = "fc")
         self._op = tf.nn.sigmoid(self._fc)
 
         self._y = tf.placeholder(name = "y", shape = [None, 1], dtype = tf.float32)

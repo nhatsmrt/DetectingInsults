@@ -6,7 +6,7 @@ from .SimpleRNN import SimpleRNN
 class BiRNN(SimpleRNN):
 
     def __init__(
-            self, n_classes = 1,
+            self, n_classes = 2,
             embedding_matrix = None,
             keep_prob = 0.8,
             use_gpu = False,
@@ -32,8 +32,8 @@ class BiRNN(SimpleRNN):
             with tf.device('/device:CPU:0'):
                 self.create_network()
 
-            self._saver = tf.train.Saver()
-            self._init_op = tf.global_variables_initializer()
+        self._saver = tf.train.Saver()
+        self._init_op = tf.global_variables_initializer()
 
 
 
@@ -80,7 +80,7 @@ class BiRNN(SimpleRNN):
 
         # Final feedforward layer and output:
         # self._fc1 = self.feedforward_layer(self._lstm_op_reshape, n_inp = 256, n_op = 512,  name = "fc1")
-        self._fc = self.feedforward_layer(self._lstm_op_reshape, n_inp = 256, n_op = self._n_classes, final_layer = True, name = "fc")
+        self._fc = self.feedforward_layer(self._lstm_op_reshape, n_inp = 256, n_op = 1, final_layer = True, name = "fc")
         self._op = tf.nn.sigmoid(self._fc)
 
         self._y = tf.placeholder(name = "y", shape = [None, 1], dtype = tf.float32)
