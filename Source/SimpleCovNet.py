@@ -54,37 +54,76 @@ class Simple1DConvNet:
 
         # Embedding layer:
         if self._embedding_matrix is not None:
-            embedding = tf.Variable(initial_value = self._embedding_matrix, name = "embedding")
+            embedding_pretrained = tf.Variable(initial_value = self._embedding_matrix, name = "embedding_pretrained")
         else:
-            embedding = tf.Variable(
+            embedding_pretrained = tf.Variable(
                 initial_value = tf.random_uniform(
                     shape = [self._n_words, self._embed_size],
                     minval = -1,
                     maxval = 1),
-                name="embedding")
+                    name="embedding_pretrained")
+        self._X_embed_pretrained = tf.stop_gradient(tf.nn.embedding_lookup(
+            embedding_pretrained,
+            self._X,
+            name = "X_embed_pretrained"
+        ))
 
-        self._X_embed = tf.nn.embedding_lookup(embedding, self._X, name = "embed_X")
+        embedding_trained = tf.Variable(
+                initial_value = tf.random_uniform(
+                    shape = [self._n_words, self._embed_size],
+                    minval = -1,
+                    maxval = 1),
+                    name = "embedding_trained"
+        )
+        self._X_embed_trained = tf.nn.embedding_lookup(embedding_trained, self._X, name = "X_embed_trained")
+
+        self._X_embed = tf.concat([self._X_embed_trained, self._X_embed_pretrained], axis = -1)
+
 
         self._conv_layer_1 = self.conv_1d_layer(
             self._X_embed,
             name = "conv_layer_1",
-            inp_channel = self._embed_size,
-            stride = 3,
-            op_channel = 16
+            stride = self._embed_size,
+            filter_width = 3,
+            inp_channel = self._embed_size * 2,
+            op_channel = 512
         )
-        self._conv_layer_2 = self.conv_1d_layer(
-            self._conv_layer_1,
-            name = "conv_layer_2",
-            inp_channel = 16,
-            stride = 3,
-            op_channel = 4
-        )
+        self._conv_layer_1_pooled = self.max_over_time_pooling(self._conv_layer_1)
 
-        self._flat = tf.reshape(self._conv_layer_2, shape = [-1, 6272], name = "flat")
-        self._fc1 = self.feed_forward(self._flat, name = "op", inp_channel = 6272, op_channel = self._n_classes)
+        # self._conv_layer_2 = self.conv_1d_layer(
+        #     self._conv_layer_1_pooled,
+        #     name = "conv_layer_2",
+        #     stride = self._embed_size,
+        #     filter_width = 3 * self._embed_size,
+        #     inp_channel = 16,
+        #     op_channel = 32
+        # )
+        # self._conv_layer_2_pooled = tf.layers.max_pooling1d(
+        #     self._conv_layer_2,
+        #     pool_size = 2,
+        #     strides = 2 * self._embed_size
+        # )
+        #
+        # self._conv_layer_3 = self.conv_1d_layer(
+        #     self._conv_layer_2_pooled,
+        #     name = "conv_layer_3",
+        #     stride = self._embed_size,
+        #     filter_width = 3 * self._embed_size,
+        #     inp_channel = 32,
+        #     op_channel = 64
+        # )
+        # self._conv_layer_3_pooled = tf.layers.max_pooling1d(
+        #     self._conv_layer_3,
+        #     pool_size = 2,
+        #     strides = 2 * self._embed_size
+        # )
+
+
+        self._flat = tf.reshape(self._conv_layer_1_pooled, shape = [-1, 512], name = "flat")
+        self._fc1 = self.feed_forward(self._flat, name = "op", inp_channel = 512, op_channel = 1)
         self._op = tf.nn.dropout(self._fc1, keep_prob = self._keep_prob_tensor)
 
-        self._op_prob = tf.nn.softmax(self._op, name = "prob")
+        self._op_prob = tf.nn.sigmoid(self._op, name = "prob")
 
     def ret_op(self):
         return self._op_prob
@@ -92,9 +131,12 @@ class Simple1DConvNet:
 # Adapt from Stanford's CS231n Assignment 3
     def run_model(self, session, predict, loss_val, Xd, yd,
                   epochs=1, batch_size=1, print_every=1,
-                  training=None, plot_losses=False, weight_save_path = None, patience = None):
+                  training=None, plot_losses=False, weight_save_path = None, patience = None, threshold = 0.5):
         # have tensorflow compute accuracy
-        correct_prediction = tf.equal(tf.argmax(self._op_prob, axis = 1), tf.argmax(self._y, axis = 1))
+        correct_prediction = tf.equal(
+            tf.cast((self._op_prob > threshold), dtype = tf.float32),
+            self._y
+        )
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
         # Define saver:
@@ -148,6 +190,7 @@ class Simple1DConvNet:
 
                     # print every now and then
                     if training_now and (iter_cnt % print_every) == 0:
+                        # print(session.run(self._op_prob, feed_dict = feed_dict).shape)
                         print("Iteration {0}: with minibatch training loss = {1:.3g} and accuracy of {2:.2g}" \
                               .format(iter_cnt, loss, np.sum(corr) / actual_batch_size))
                 else:
@@ -182,25 +225,26 @@ class Simple1DConvNet:
                 plt.xlabel('minibatch number')
                 plt.ylabel('minibatch loss')
                 plt.show()
+        print("Finish Training.")
         return total_loss, total_correct
 
 
     # Define a max pool layer with size 2x2, stride of 2 and same padding.
 
     # Predict:
-    def predict(self, X, return_prob = False):
+    def predict(self, X, threshold = 0.5, return_prob = False):
         prob = self._sess.run(self._op_prob, feed_dict = {self._X : X, self._is_training : False, self._keep_prob_tensor : 1.0})
 
         if return_prob:
             return prob
 
-        ans = np.argmax(prob, axis = -1)
-        return ans
+        return (prob > threshold).astype(np.int32)
 
     # Define layers and modules:
     def conv_1d_layer(
             self, x, name, inp_channel, op_channel, filter_width = 3,
-            stride = 1, padding = 'SAME', not_activated = False, dropout = False):
+            stride = 1, padding = 'SAME', not_activated = False, dropout = False
+    ):
         W_conv = tf.get_variable(
             name = "W_conv_" + name,
             shape = [filter_width, inp_channel, op_channel],
@@ -224,6 +268,10 @@ class Simple1DConvNet:
         return h_conv
 
 
+    def max_over_time_pooling(self, x):
+        return tf.reduce_max(x, axis = -2)
+
+
 
     def feed_forward(self, x, name, inp_channel, op_channel, op_layer = False):
         W = tf.get_variable("W_" + name, shape = [inp_channel, op_channel], dtype = tf.float32, initializer = tf.contrib.layers.xavier_initializer())
@@ -238,15 +286,11 @@ class Simple1DConvNet:
             a_norm = tf.layers.batch_normalization(a, training = self._is_training)
             return a_norm
 
-    def max_pool_2x2(self, x):
-        return tf.nn.max_pool(x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-
-
 
     # Train:
-    def fit(self, X, y, num_epoch = 64, batch_size = 16, weight_save_path = None, weight_load_path = None, plot_losses = False):
-        self._y = tf.placeholder(tf.float32, shape = [None, self._n_classes])
-        self._mean_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = self._op, labels = self._y))
+    def fit(self, X, y, num_epochs = 64, batch_size = 16, weight_save_path = None, weight_load_path = None, patience = None, plot_losses = False):
+        self._y = tf.placeholder(tf.float32, shape = [None, 1])
+        self._mean_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits = self._op, labels = self._y))
         self._optimizer = tf.train.AdamOptimizer(1e-4)
         extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(extra_update_ops):
@@ -258,9 +302,9 @@ class Simple1DConvNet:
             print("Weight loaded successfully")
         else:
             self._sess.run(tf.global_variables_initializer())
-        if num_epoch > 0:
-            print('Training Characters Classifier for ' + str(num_epoch) +  ' epochs')
-            self.run_model(self._sess, self._op_prob, self._mean_loss, X, y, num_epoch, batch_size, 1, self._train_step, weight_save_path = weight_save_path, plot_losses = plot_losses)
+        if num_epochs > 0:
+            print('Training Characters Classifier for ' + str(num_epochs) +  ' epochs')
+            self.run_model(self._sess, self._op_prob, self._mean_loss, X, y, num_epochs, batch_size, 1, self._train_step, weight_save_path = weight_save_path, patience = patience, plot_losses = plot_losses)
 
 
 

@@ -65,7 +65,10 @@ def preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, stopwords_list = None):
         if len(word_array) > 0:
             word_array = [word2idx.get(word, UNKNOWN_TOKEN) for word in word_array]
             if len(word_array) <= seq_len:
-                X[ind, -len(word_array):] = np.array(word_array).astype(np.int32)
+                pad_size = seq_len - len(word_array)
+                for i in range(pad_size):
+                    word_array.append(word2idx.get('<pad>'))
+                X[ind, :] = np.array(word_array).astype(np.int32)
             else:
                 X[ind, :] = np.array(word_array).astype(np.int32)[0:seq_len]
 

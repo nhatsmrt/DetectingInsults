@@ -76,7 +76,9 @@ class StackedBiRNN(SimpleRNN):
             inputs = self._X_embed,
             dtype = tf.float32,
             initial_states_fw = self._initial_states_fw,
-            initial_states_bw = self._initial_states_bw)
+            initial_states_bw = self._initial_states_bw,
+            sequence_length=self.length(self._X_embed)
+        )
         self._lstm_op_concat = tf.concat(self._lstm_op, 2)
         self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op_concat[:, -1]), (self._batch_size, -1))
 
@@ -115,6 +117,7 @@ class StackedBiRNN(SimpleRNN):
             print("Weights loaded successfully.")
 
         cur_val_loss = 1000
+        cur_val_acc = 0
         p = 0
 
         for e in range(num_epochs):
@@ -170,12 +173,26 @@ class StackedBiRNN(SimpleRNN):
                 for l in range(self._n_layers):
                     feed_dict[self._initial_states_fw[l]] = states_fw[l]
                     feed_dict[self._initial_states_bw[l]] = states_bw[l]
-                val_loss = self._sess.run(self._mean_loss, feed_dict = feed_dict_val)
-                print("Validation loss: " + str(val_loss))
+                val_loss, val_acc = self._sess.run([self._mean_loss, self._accuracy], feed_dict = feed_dict_val)
 
-                if val_loss < cur_val_loss:
-                    cur_val_loss = val_loss
-                    print("Validation loss decreases.")
+                print("Validation loss: " + str(val_loss))
+                print("Validation accuracy: " + str(val_acc))
+
+                # if val_loss < cur_val_loss:
+                #     cur_val_loss = val_loss
+                #     print("Validation loss decreases.")
+                #     if weight_save_path is not None:
+                #         save_path = self._saver.save(self._sess, save_path = weight_save_path)
+                #         print("Model's weights saved at %s" % save_path)
+                #     p = 0
+                # else:
+                #     p += 1
+                #     if p > patience:
+                #         return
+
+                if val_acc > cur_val_acc:
+                    cur_val_acc = val_acc
+                    print("Validation accuracy increases.")
                     if weight_save_path is not None:
                         save_path = self._saver.save(self._sess, save_path = weight_save_path)
                         print("Model's weights saved at %s" % save_path)

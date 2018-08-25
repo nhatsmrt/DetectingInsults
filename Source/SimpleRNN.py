@@ -13,6 +13,7 @@ class SimpleRNN:
             n_words = 3000,
             embed_size = 300,
     ):
+        tf.set_random_seed(0)
         self._keep_prob = keep_prob
         self._keep_prob_tensor = tf.placeholder(tf.float32, name = "keep_prob_tens")
         self._n_classes = n_classes
@@ -51,6 +52,7 @@ class SimpleRNN:
         if self._embedding_matrix is not None:
             embedding = tf.Variable(initial_value = self._embedding_matrix, name = "embedding")
         else:
+            np.random.seed(0)
             embedding = tf.Variable(
                 initial_value = tf.random_uniform(
                     shape = [self._n_words, self._embed_size],
@@ -68,7 +70,9 @@ class SimpleRNN:
             cell = self._cell,
             inputs = self._X_embed,
             dtype = tf.float32,
-            initial_state = self._initial_state)
+            initial_state = self._initial_state,
+            sequence_length = self.length(self._X_embed)
+        )
         self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op[:, -1]), (self._batch_size, -1))
 
         # Final feedforward layer and output:
@@ -140,7 +144,9 @@ class SimpleRNN:
             print("Weights loaded successfully.")
 
         cur_val_loss = 1000
+        cur_val_acc = 0
         p = 0
+
         for e in range(num_epochs):
             print("Epoch " + str(e + 1))
             # state = self._sess.run(self._initial_state, feed_dict = {self._batch_size: batch_size})
@@ -185,12 +191,26 @@ class SimpleRNN:
                     self._batch_size: X_val.shape[0],
                     self._initial_state: state
                 }
-                val_loss = self._sess.run(self._mean_loss, feed_dict = feed_dict_val)
-                print("Validation loss: " + str(val_loss))
+                val_loss, val_acc = self._sess.run([self._mean_loss, self._accuracy], feed_dict = feed_dict_val)
 
-                if val_loss < cur_val_loss:
-                    cur_val_loss = val_loss
-                    print("Validation loss decreases.")
+                print("Validation loss: " + str(val_loss))
+                print("Validation accuracy: " + str(val_acc))
+
+                # if val_loss < cur_val_loss:
+                #     cur_val_loss = val_loss
+                #     print("Validation loss decreases.")
+                #     if weight_save_path is not None:
+                #         save_path = self._saver.save(self._sess, save_path = weight_save_path)
+                #         print("Model's weights saved at %s" % save_path)
+                #     p = 0
+                # else:
+                #     p += 1
+                #     if p > patience:
+                #         return
+
+                if val_acc > cur_val_acc:
+                    cur_val_acc = val_acc
+                    print("Validation accuracy increases.")
                     if weight_save_path is not None:
                         save_path = self._saver.save(self._sess, save_path = weight_save_path)
                         print("Model's weights saved at %s" % save_path)
@@ -199,6 +219,7 @@ class SimpleRNN:
                     p += 1
                     if p > patience:
                         return
+
             else:
                 if weight_save_path is not None:
                     save_path = self._saver.save(self._sess, save_path=weight_save_path)
@@ -228,8 +249,16 @@ class SimpleRNN:
             }
             prob[idx, :] = self._sess.run(self._op, feed_dict = feed_dict)
 
+
         if return_proba:
             return prob
 
         return (prob > threshold).astype(np.int32)
+
+    def length(self, sequence):
+        used = tf.sign(tf.reduce_max(tf.abs(sequence), 2))
+        length = tf.reduce_sum(used, 1)
+        length = tf.cast(length, tf.int32)
+        return length
+
 

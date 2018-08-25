@@ -20,7 +20,7 @@ glove_path = os.path.join(data_path, "glove.6B.50d.txt")
 weight_save_path = str(d) + "/weights/weights_base.best.hdf5"
 # weight_load_path = str(d) + "/weights/model_stacked_birnn.ckpt"
 weight_load_path = None
-augment_path = data_path + "/augmented_data_yandex_0.csv"
+augment_path = data_path + "augmented_data_yandex_0.csv"
 
 RANDOM_STATE = 42
 
@@ -60,6 +60,10 @@ UNKNOWN_TOKEN = len(embedding_weights)
 word2idx['UNK'] = UNKNOWN_TOKEN
 embedding_weights.append(np.random.rand(EMBEDDING_DIMENSION))
 
+### Pad token:
+word2idx['<pad>'] = len(embedding_weights)
+embedding_weights.append(np.zeros(EMBEDDING_DIMENSION))
+
 embedding_weights = np.asarray(embedding_weights, dtype = np.float32)
 VOCAB_SIZE = embedding_weights.shape[0]
 
@@ -80,6 +84,7 @@ X_augmented_raw = np.append(
     axis = 0
 )
 seq_len = 500
+# X_train = preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
 X_augmented = preprocess(X_augmented_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
 
 checkpoint = ModelCheckpoint(
