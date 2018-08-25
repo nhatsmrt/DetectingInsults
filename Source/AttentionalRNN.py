@@ -65,7 +65,9 @@ class AttentionalRNN(SimpleRNN):
             cell = self._cell,
             inputs = self._X_embed,
             dtype = tf.float32,
-            initial_state = self._initial_state)
+            initial_state = self._initial_state,
+            sequence_length = self.length(self._X_embed)
+        )
 
         # Final feedforward layer and output:
         self._attention = self.attention_module(

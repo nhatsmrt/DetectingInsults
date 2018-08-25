@@ -73,11 +73,12 @@ class SimpleRNN:
             initial_state = self._initial_state,
             sequence_length = self.length(self._X_embed)
         )
-        self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op[:, -1]), (self._batch_size, -1))
+        # self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op[:, -1]), (self._batch_size, -1))
+        self._final_state_reshape = tf.reshape(self._final_state, shape = [-1, 128])
 
         # Final feedforward layer and output:
         # self._fc1 = self.feedforward_layer(self._lstm_op_reshape, n_inp = 128, n_op = 256,  name = "fc1")
-        self._fc = self.feedforward_layer(self._lstm_op_reshape, n_inp = 128, n_op = 1, final_layer = True, name = "fc")
+        self._fc = self.feedforward_layer(self._final_state_reshape, n_inp = 128, n_op = 1, final_layer = True, name = "fc")
         self._op = tf.nn.sigmoid(self._fc)
 
         self._y = tf.placeholder(name = "y", shape = [None, 1], dtype = tf.float32)
@@ -88,7 +89,6 @@ class SimpleRNN:
 
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
-
 
 
     def multiple_lstm_cells(self, n_units, n_cells):
@@ -260,5 +260,4 @@ class SimpleRNN:
         length = tf.reduce_sum(used, 1)
         length = tf.cast(length, tf.int32)
         return length
-
 

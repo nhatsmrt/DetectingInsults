@@ -82,8 +82,11 @@ class StackedBiRNN(SimpleRNN):
         self._lstm_op_concat = tf.concat(self._lstm_op, 2)
         self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op_concat[:, -1]), (self._batch_size, -1))
 
+        self._final_states_concat = tf.concat([self._final_states_fw, self._final_states_bw], axis = -1)
+        self._final_states_reshape = tf.reshape(self._final_states_concat, shape = [-1, 256])
+
         # Final feedforward layer and output:
-        self._fc = self.feedforward_layer(self._lstm_op_reshape, n_inp = 256, n_op = 1, final_layer = True, name = "fc")
+        self._fc = self.feedforward_layer(self._final_states_reshape, n_inp = 256, n_op = 1, final_layer = True, name = "fc")
         self._op = tf.nn.sigmoid(self._fc)
 
         self._y = tf.placeholder(name = "y", shape = [None, 1], dtype = tf.float32)

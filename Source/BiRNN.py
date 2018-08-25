@@ -75,14 +75,17 @@ class BiRNN(SimpleRNN):
             dtype = tf.float32,
             initial_state_fw = self._initial_state_fw,
             initial_state_bw = self._initial_state_bw,
-            sequence_length=self.length(self._X_embed)
+            sequence_length = self.length(self._X_embed)
         )
         self._lstm_op_concat = tf.concat(self._lstm_op, 2)
         self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op_concat[:, -1]), (self._batch_size, -1))
+        self._final_states_concat = tf.concat(self._final_states, 2)
+        self._final_states_reshape = tf.reshape(self._final_states_concat, shape = [-1, 256])
+
 
         # Final feedforward layer and output:
         # self._fc1 = self.feedforward_layer(self._lstm_op_reshape, n_inp = 256, n_op = 512,  name = "fc1")
-        self._fc = self.feedforward_layer(self._lstm_op_reshape, n_inp = 256, n_op = 1, final_layer = True, name = "fc")
+        self._fc = self.feedforward_layer(self._final_states_reshape, n_inp = 256, n_op = 1, final_layer = True, name = "fc")
         self._op = tf.nn.sigmoid(self._fc)
 
         self._y = tf.placeholder(name = "y", shape = [None, 1], dtype = tf.float32)
@@ -151,6 +154,8 @@ class BiRNN(SimpleRNN):
                 _, loss, acc, states = self._sess.run(
                     [self._train_step, self._mean_loss, self._accuracy, self._final_states],
                     feed_dict = feed_dict)
+
+                # print(self._sess.run(self._final_states_concat, feed_dict = feed_dict).shape)
                 state_fw = states[0]
                 state_bw = states[1]
 

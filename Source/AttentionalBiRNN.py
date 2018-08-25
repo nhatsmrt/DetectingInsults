@@ -56,7 +56,9 @@ class AttentionalBiRNN(BiRNN, AttentionalRNN):
             inputs = self._X_embed,
             dtype = tf.float32,
             initial_state_fw = self._initial_state_fw,
-            initial_state_bw = self._initial_state_bw)
+            initial_state_bw = self._initial_state_bw,
+            sequence_length=self.length(self._X_embed)
+        )
         self._lstm_op_concat = tf.concat(self._lstm_op, 2)
 
         # Final feedforward layer and output:
