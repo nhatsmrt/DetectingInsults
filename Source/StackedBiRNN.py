@@ -66,8 +66,8 @@ class StackedBiRNN(SimpleRNN):
 
         # LSTM Layer:
         # self._cell = self.multiple_lstm_cells(n_units = 512, n_layers = 3)
-        self._cells_fw = [self.multiple_lstm_cells(n_units = 128, n_cells = 1) for _ in range(self._n_layers)]
-        self._cells_bw = [self.multiple_lstm_cells(n_units = 128, n_cells = 1) for _ in range(self._n_layers)]
+        self._cells_fw = [self.multiple_gru_cells(n_units = 128, n_cells = 1) for _ in range(self._n_layers)]
+        self._cells_bw = [self.multiple_gru_cells(n_units = 128, n_cells = 1) for _ in range(self._n_layers)]
         self._initial_states_fw = [cell.zero_state(batch_size = self._batch_size, dtype = tf.float32) for cell in self._cells_fw]
         self._initial_states_bw = [cell.zero_state(batch_size = self._batch_size, dtype = tf.float32) for cell in self._cells_bw]
         self._lstm_op, self._final_states_fw, self._final_states_bw = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(
@@ -77,12 +77,12 @@ class StackedBiRNN(SimpleRNN):
             dtype = tf.float32,
             initial_states_fw = self._initial_states_fw,
             initial_states_bw = self._initial_states_bw,
-            sequence_length=self.length(self._X_embed)
+            sequence_length = self.length(self._X_embed)
         )
         self._lstm_op_concat = tf.concat(self._lstm_op, 2)
         self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op_concat[:, -1]), (self._batch_size, -1))
 
-        self._final_states_concat = tf.concat([self._final_states_fw, self._final_states_bw], axis = -1)
+        self._final_states_concat = tf.concat([self._final_states_fw[self._n_layers - 1], self._final_states_bw[self._n_layers - 1]], axis = -1)
         self._final_states_reshape = tf.reshape(self._final_states_concat, shape = [-1, 256])
 
         # Final feedforward layer and output:
