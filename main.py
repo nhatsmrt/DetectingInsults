@@ -29,7 +29,7 @@ RANDOM_STATE = 42
 ## Adapt from https://damienpontifex.com/2017/10/27/using-pre-trained-glove-embeddings-in-tensorflow/
 PAD_TOKEN = 0
 embedding_weights = []
-word2idx = { 'PAD': PAD_TOKEN }
+word2idx = { '<pad>': PAD_TOKEN }
 with open(glove_path, 'r') as file:
     for ind, line in enumerate(file):
         values = line.split()
@@ -42,12 +42,10 @@ with open(glove_path, 'r') as file:
             break
 
 EMBEDDING_DIMENSION = len(embedding_weights[0])
-## Insert random PAD weights at index 0:
-embedding_weights.insert(0, np.random.rand(EMBEDDING_DIMENSION))
+## Insert zero PAD weights at index 0:
+embedding_weights.insert(0, np.zeros(EMBEDDING_DIMENSION))
 
-
-## Insert other useful tokens:
-
+## Insert other useful tokens:\
 ### Unknown token:
 UNKNOWN_TOKEN = len(embedding_weights)
 word2idx['UNK'] = UNKNOWN_TOKEN
@@ -60,10 +58,6 @@ embedding_weights.append(np.random.rand(EMBEDDING_DIMENSION))
 ### Number token:
 word2idx['<num>'] = len(embedding_weights)
 embedding_weights.append(np.random.rand(EMBEDDING_DIMENSION))
-
-### Pad token:
-word2idx['<pad>'] = len(embedding_weights)
-embedding_weights.append(np.zeros(EMBEDDING_DIMENSION))
 
 embedding_weights = np.asarray(embedding_weights, dtype = np.float32)
 VOCAB_SIZE = embedding_weights.shape[0]
@@ -85,12 +79,12 @@ X_augmented_raw = np.append(
     df_augmented["Comment"].values,
     axis = 0
 )
-seq_len = 500
-X_raw = preprocess(X_augmented_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
+seq_len = 3000
+X_raw = preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
 X_train, X_val, y_train, y_val = train_test_split(
     X_raw,
-    y_augmented,
-    train_size = 0.9,
+    y,
+    train_size = 0.95,
     random_state = RANDOM_STATE
 )
 
@@ -107,10 +101,11 @@ model.fit(
     y_train,
     X_val,
     y_val,
-    num_epochs = 100,
-    patience = 10,
+    num_epochs = 1,
+    patience = 5,
     weight_save_path = weight_save_path,
-    weight_load_path = None
+    weight_load_path = None,
+    val_metric = 'loss'
 )
 
 
