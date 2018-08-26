@@ -59,7 +59,7 @@ class AttentionalRNN(SimpleRNN):
         self._X_embed = tf.nn.embedding_lookup(embedding, self._X, name = "embed_X")
 
         # GRU Layer:
-        self._cells_weights_list, self._cell = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru")
+        self._cell = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru")
         self._initial_state = self._cell.zero_state(batch_size = self._batch_size, dtype = tf.float32)
         self._lstm_op, self._final_state = tf.nn.dynamic_rnn(
             cell = self._cell,
@@ -68,6 +68,8 @@ class AttentionalRNN(SimpleRNN):
             initial_state = self._initial_state,
             sequence_length = self.length(self._X_embed)
         )
+        self._pretrain_weights_list = tf.trainable_variables()[1:]
+
 
         # Final feedforward layer and output:
         self._attention = self.attention_module(
@@ -88,10 +90,6 @@ class AttentionalRNN(SimpleRNN):
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
 
-        self._save_dict = dict()
-        self._save_dict['embedding'] = embedding
-        for cell_ind in range(1):
-            self._save_dict['gru_' + str(cell_ind)] = self._cells_weights_list[cell_ind]
 
 
     def attention_module(self, hidden_states, name, n_units, context_dim):

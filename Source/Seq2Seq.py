@@ -1,7 +1,6 @@
 import numpy as np
 import tensorflow as tf
 import math
-from .SimpleRNN import SimpleRNN
 
 class Seq2Seq:
 
@@ -23,7 +22,6 @@ class Seq2Seq:
         self._embed_size = embed_size
         self._embedding_matrix = embedding_matrix
 
-        # with self._g.as_default():
         if use_gpu:
             with tf.device('/device:GPU:0'):
                 self.create_network()
@@ -31,20 +29,21 @@ class Seq2Seq:
             with tf.device('/device:CPU:0'):
                 self.create_network()
 
-            self._init_op = tf.global_variables_initializer()
 
     # def lstm_layer(self, x, cell):
     #     output, final_states = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32)
     #     return output, final_states
 
     def create_network(self):
+        self._sess = tf.Session()
+        self._init_op_cell = tf.global_variables_initializer()
         self._X = tf.placeholder(shape=[None, self._seq_len], dtype=tf.int32)
         self._batch_size = tf.placeholder(shape=[], dtype=tf.int32)
         self._is_training = tf.placeholder(tf.bool)
 
         # Embedding layer:
         if self._embedding_matrix is not None:
-            embedding = tf.Variable(initial_value=self._embedding_matrix, name="embedding")
+            embedding = tf.Variable(initial_value=self._embedding_matrix, name="embedding", trainable = False)
         else:
             np.random.seed(0)
             embedding = tf.Variable(
@@ -54,12 +53,14 @@ class Seq2Seq:
                     maxval=1),
                 name="embedding")
 
+        embedding = tf.stop_gradient(embedding)
         self._X_embed = tf.nn.embedding_lookup(embedding, self._X, name="embed_X")
 
         # LSTM Layer:
         # self._cell = self.multiple_lstm_cells(n_units = 512, n_layers = 3)
         n_cells = 1
-        self._cells_weights_list, self._cell = self.multiple_gru_cells(n_units=128, n_cells = n_cells, name = "gru")
+        self._cell = self.multiple_gru_cells(n_units=128, n_cells = n_cells, name = "gru")
+        self._sess.run(self._init_op_cell)
         self._initial_state = self._cell.zero_state(batch_size=self._batch_size, dtype=tf.float32)
         self._encoder_op, self._encoder_final_state = tf.nn.dynamic_rnn(
             cell = self._cell,
@@ -68,6 +69,7 @@ class Seq2Seq:
             initial_state=self._initial_state,
             sequence_length=self.length(self._X_embed)
         )
+        self._save_list = tf.trainable_variables()
         self._decoder_rnn_op, self._decoder_rnn_final_state = tf.nn.dynamic_rnn(
             cell = self._cell,
             inputs = self._X_embed,
@@ -75,7 +77,6 @@ class Seq2Seq:
             initial_state = self._encoder_final_state,
             sequence_length = self.length(self._X_embed)
         )
-        print(self._decoder_rnn_op)
         self._op = self.decode(self._decoder_rnn_op, n_units = 128)
 
         # Final feedforward layer and output:
@@ -83,20 +84,17 @@ class Seq2Seq:
 
         self._mean_loss = self.cost(op = self._op, target = self._X_embed)
 
+
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
+        self._init_op = tf.global_variables_initializer()
 
-        save_dict = dict()
-        save_dict['embedding'] = embedding
-        for cell_ind in range(n_cells):
-            save_dict['gru_' + str(cell_ind)] = self._cells_weights_list[cell_ind]
-        self._saver = tf.train.Saver(save_dict)
+
 
     def multiple_gru_cells(self, n_units, n_cells, name):
         cells_list = [tf.contrib.rnn.GRUCell(num_units = n_units, name = name + "_" + str(ind)) for ind in range(n_cells)]
         cells_list_dropout = [tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob = self._keep_prob_tensor) for cell in cells_list]
-        cells_weights_list = [cell.get_weights() for cell in cells_list]
-        return cells_weights_list, tf.contrib.rnn.MultiRNNCell(cells_list_dropout)
+        return tf.contrib.rnn.MultiRNNCell(cells_list_dropout)
 
     def feedforward_layer(self, x, n_inp, n_op, name, final_layer = False):
         W = tf.get_variable(name = "W_" + name, shape = [n_inp, n_op])
@@ -129,8 +127,8 @@ class Seq2Seq:
     ):
         # with self._g.as_default():
 
-        self._sess = tf.Session()
         self._sess.run(self._init_op)
+        self._saver = tf.train.Saver(self._save_list)
 
         iter = 0
 

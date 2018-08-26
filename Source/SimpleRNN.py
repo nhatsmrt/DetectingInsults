@@ -67,7 +67,7 @@ class SimpleRNN:
 
         # LSTM Layer:
         # self._cell = self.multiple_lstm_cells(n_units = 512, n_layers = 3)
-        self._cells_weights_list, self._cell = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru")
+        self._cell = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru")
         self._initial_state = self._cell.zero_state(batch_size = self._batch_size, dtype = tf.float32)
         self._lstm_op, self._final_state = tf.nn.dynamic_rnn(
             cell = self._cell,
@@ -76,6 +76,7 @@ class SimpleRNN:
             initial_state = self._initial_state,
             sequence_length = self.length(self._X_embed)
         )
+        self._pretrain_weights_list = tf.trainable_variables()[1:]
         # self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op[:, -1]), (self._batch_size, -1))
         self._final_state_reshape = tf.reshape(self._final_state, shape = [-1, 128])
 
@@ -93,10 +94,6 @@ class SimpleRNN:
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
 
-        self._save_dict = dict()
-        self._save_dict['embedding'] = embedding
-        for cell_ind in range(1):
-            self._save_dict['gru_' + str(cell_ind)] = self._cells_weights_list[cell_ind]
 
     def multiple_lstm_cells(self, n_units, n_cells):
         return tf.contrib.rnn.MultiRNNCell(
@@ -109,8 +106,7 @@ class SimpleRNN:
     def multiple_gru_cells(self, n_units, n_cells, name):
         cells_list = [tf.contrib.rnn.GRUCell(num_units = n_units, name = name + "_" + str(ind)) for ind in range(n_cells)]
         cells_list_dropout = [tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob = self._keep_prob_tensor) for cell in cells_list]
-        cells_weights_list = [cell.get_weights() for cell in cells_list]
-        return cells_weights_list, tf.contrib.rnn.MultiRNNCell(cells_list_dropout)
+        return tf.contrib.rnn.MultiRNNCell(cells_list_dropout)
 
     # def multiple_lstm_layers(self, cell, x):
     #     output, final_states = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32)
@@ -148,7 +144,7 @@ class SimpleRNN:
             self._saver.restore(self._sess, save_path = weight_load_path)
             print("Weights loaded successfully.")
         elif self._pretrained_weight_path is not None:
-            self._cell_saver = tf.train.Saver(self._save_dict)
+            self._cell_saver = tf.train.Saver(self._pretrain_weights_list)
             self._cell_saver.restore(self._sess, save_path = self._pretrained_weight_path)
             print("Pretrained weight loaded successfully.")
 

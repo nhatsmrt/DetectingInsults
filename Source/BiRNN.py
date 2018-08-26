@@ -64,8 +64,8 @@ class BiRNN(SimpleRNN):
 
         # LSTM Layer:
         # self._cell = self.multiple_lstm_cells(n_units = 512, n_layers = 3)
-        self._cells_fw_weights_list, self._cell_fw = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru_fw")
-        self._cells_bw_weights_list, self._cell_bw = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru_bw")
+        self._cell_fw = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru_fw")
+        self._cell_bw = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru_bw")
         self._initial_state_fw = self._cell_fw.zero_state(batch_size = self._batch_size, dtype = tf.float32)
         self._initial_state_bw = self._cell_fw.zero_state(batch_size = self._batch_size, dtype = tf.float32)
         self._lstm_op, self._final_states = tf.nn.bidirectional_dynamic_rnn(
@@ -77,6 +77,7 @@ class BiRNN(SimpleRNN):
             initial_state_bw = self._initial_state_bw,
             sequence_length = self.length(self._X_embed)
         )
+        self._pretrain_weights_list = tf.trainable_variables()[1:]
         self._lstm_op_concat = tf.concat(self._lstm_op, 2)
         self._lstm_op_reshape = tf.reshape(tf.squeeze(self._lstm_op_concat[:, -1]), (self._batch_size, -1))
         self._final_states_concat = tf.concat(self._final_states, 2)
@@ -97,11 +98,6 @@ class BiRNN(SimpleRNN):
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
 
-        self._save_dict = dict()
-        self._save_dict['embedding'] = embedding
-        for cell_ind in range(1):
-            self._save_dict['gru_fw' + str(cell_ind)] = self._cells_fw_weights_list[cell_ind]
-            self._save_dict['gru_bw' + str(cell_ind)] = self._cells_bw_weights_list[cell_ind]
 
 
 
@@ -128,7 +124,7 @@ class BiRNN(SimpleRNN):
             self._saver.restore(self._sess, save_path = weight_load_path)
             print("Weights loaded successfully.")
         elif self._pretrained_weight_path is not None:
-            self._cell_saver = tf.train.Saver(self._save_dict)
+            self._cell_saver = tf.train.Saver(self._pretrain_weights_list)
             self._cell_saver.restore(self._sess, save_path = self._pretrained_weight_path)
             print("Pretrained weight loaded successfully.")
 
