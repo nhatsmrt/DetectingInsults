@@ -11,14 +11,14 @@ class AttentionalRNN(SimpleRNN):
             keep_prob = 0.5,
             use_gpu = False,
             seq_len = 200,
-            n_words = 3000,
+            vocab_size = 3000,
             embed_size = 300,
     ):
         self._keep_prob = keep_prob
         self._keep_prob_tensor = tf.placeholder(tf.float32, name = "keep_prob_tens")
         self._n_classes = n_classes
         self._seq_len = seq_len
-        self._n_words = n_words
+        self._vocab_size = vocab_size
         self._embed_size = embed_size
         self._embedding_matrix = embedding_matrix
 
@@ -51,7 +51,7 @@ class AttentionalRNN(SimpleRNN):
         else:
             embedding = tf.Variable(
                 initial_value = tf.random_uniform(
-                    shape = [self._n_words, self._embed_size],
+                    shape = [self._vocab_size, self._embed_size],
                     minval = -1,
                     maxval = 1),
                 name="embedding")
@@ -59,7 +59,7 @@ class AttentionalRNN(SimpleRNN):
         self._X_embed = tf.nn.embedding_lookup(embedding, self._X, name = "embed_X")
 
         # GRU Layer:
-        self._cell = self.multiple_gru_cells(n_units = 128, n_cells = 1)
+        self._cells_weights_list, self._cell = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru")
         self._initial_state = self._cell.zero_state(batch_size = self._batch_size, dtype = tf.float32)
         self._lstm_op, self._final_state = tf.nn.dynamic_rnn(
             cell = self._cell,
@@ -88,6 +88,12 @@ class AttentionalRNN(SimpleRNN):
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
 
+        self._save_dict = dict()
+        self._save_dict['embedding'] = embedding
+        for cell_ind in range(1):
+            self._save_dict['gru_' + str(cell_ind)] = self._cells_weights_list[cell_ind]
+
+
     def attention_module(self, hidden_states, name, n_units, context_dim):
         W = tf.get_variable(name = "W_" + name, shape = [n_units, context_dim])
         b = tf.get_variable(name = "b_" + name, shape = [context_dim])
@@ -95,9 +101,11 @@ class AttentionalRNN(SimpleRNN):
         hidden_states_reshaped = tf.reshape(hidden_states, shape = [-1, n_units])
         rep = tf.tanh(tf.matmul(hidden_states_reshaped, W) + b)
 
+        mask = tf.sign(tf.reduce_max(tf.abs(hidden_states), 2))
+
         context = tf.get_variable(name = "cont_" + name, shape = [context_dim, 1])
         score = tf.nn.softmax(
-            tf.reshape(tf.matmul(rep, context), (-1, self._seq_len)),
+            tf.reshape(tf.matmul(rep, context), (-1, self._seq_len)) * mask,
             axis = -1
         )
 

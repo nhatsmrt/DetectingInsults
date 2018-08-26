@@ -11,7 +11,7 @@ class StackedBiRNN(SimpleRNN):
             keep_prob = 0.5,
             use_gpu = False,
             seq_len = 200,
-            n_words = 3000,
+            vocab_size = 3000,
             embed_size = 300,
             n_layers = 2
     ):
@@ -19,7 +19,7 @@ class StackedBiRNN(SimpleRNN):
         self._keep_prob_tensor = tf.placeholder(tf.float32, name = "keep_prob_tens")
         self._n_classes = n_classes
         self._seq_len = seq_len
-        self._n_words = n_words
+        self._vocab_size = vocab_size
         self._embed_size = embed_size
         self._embedding_matrix = embedding_matrix
         self._n_layers = n_layers
@@ -57,7 +57,7 @@ class StackedBiRNN(SimpleRNN):
         else:
             embedding = tf.Variable(
                 initial_value = tf.random_uniform(
-                    shape = [self._n_words, self._embed_size],
+                    shape = [self._vocab_size, self._embed_size],
                     minval = -1,
                     maxval = 1),
                 name="embedding")

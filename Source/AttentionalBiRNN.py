@@ -46,8 +46,8 @@ class AttentionalBiRNN(BiRNN, AttentionalRNN):
 
         # LSTM Layer:
         # self._cell = self.multiple_lstm_cells(n_units = 512, n_layers = 3)
-        self._cell_fw = self.multiple_gru_cells(n_units = 128, n_cells = 1)
-        self._cell_bw = self.multiple_gru_cells(n_units = 128, n_cells = 1)
+        self._cells_fw_weights_list, self._cell_fw = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru_fw")
+        self._cells_bw_weights_list, self._cell_bw = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru_bw")
         self._initial_state_fw = self._cell_fw.zero_state(batch_size = self._batch_size, dtype = tf.float32)
         self._initial_state_bw = self._cell_fw.zero_state(batch_size = self._batch_size, dtype = tf.float32)
         self._lstm_op, self._final_states = tf.nn.bidirectional_dynamic_rnn(
@@ -84,4 +84,10 @@ class AttentionalBiRNN(BiRNN, AttentionalRNN):
 
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
+
+        self._save_dict = dict()
+        self._save_dict['embedding'] = embedding
+        for cell_ind in range(1):
+            self._save_dict['gru_fw' + str(cell_ind)] = self._cells_fw_weights_list[cell_ind]
+            self._save_dict['gru_bw' + str(cell_ind)] = self._cells_bw_weights_list[cell_ind]
 

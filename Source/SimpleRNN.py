@@ -7,10 +7,11 @@ class SimpleRNN:
     def __init__(
             self, n_classes = 2,
             embedding_matrix = None,
+            pretrained_weight_path = None,
             keep_prob = 0.5,
             use_gpu = False,
             seq_len = 200,
-            n_words = 3000,
+            vocab_size = 3000,
             embed_size = 300,
     ):
         tf.set_random_seed(0)
@@ -18,9 +19,10 @@ class SimpleRNN:
         self._keep_prob_tensor = tf.placeholder(tf.float32, name = "keep_prob_tens")
         self._n_classes = n_classes
         self._seq_len = seq_len
-        self._n_words = n_words
+        self._vocab_size = vocab_size
         self._embed_size = embed_size
         self._embedding_matrix = embedding_matrix
+        self._pretrained_weight_path = pretrained_weight_path
 
         self._g = tf.Graph()
 
@@ -48,6 +50,7 @@ class SimpleRNN:
         self._is_training = tf.placeholder(tf.bool)
 
 
+
         # Embedding layer:
         if self._embedding_matrix is not None:
             embedding = tf.Variable(initial_value = self._embedding_matrix, name = "embedding")
@@ -55,7 +58,7 @@ class SimpleRNN:
             np.random.seed(0)
             embedding = tf.Variable(
                 initial_value = tf.random_uniform(
-                    shape = [self._n_words, self._embed_size],
+                    shape = [self._vocab_size, self._embed_size],
                     minval = -1,
                     maxval = 1),
                 name="embedding")
@@ -64,7 +67,7 @@ class SimpleRNN:
 
         # LSTM Layer:
         # self._cell = self.multiple_lstm_cells(n_units = 512, n_layers = 3)
-        self._cell = self.multiple_gru_cells(n_units = 128, n_cells = 1)
+        self._cells_weights_list, self._cell = self.multiple_gru_cells(n_units = 128, n_cells = 1, name = "gru")
         self._initial_state = self._cell.zero_state(batch_size = self._batch_size, dtype = tf.float32)
         self._lstm_op, self._final_state = tf.nn.dynamic_rnn(
             cell = self._cell,
@@ -90,6 +93,10 @@ class SimpleRNN:
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
 
+        self._save_dict = dict()
+        self._save_dict['embedding'] = embedding
+        for cell_ind in range(1):
+            self._save_dict['gru_' + str(cell_ind)] = self._cells_weights_list[cell_ind]
 
     def multiple_lstm_cells(self, n_units, n_cells):
         return tf.contrib.rnn.MultiRNNCell(
@@ -99,13 +106,11 @@ class SimpleRNN:
             for _ in range(n_cells)]
         )
 
-    def multiple_gru_cells(self, n_units, n_cells):
-        return tf.contrib.rnn.MultiRNNCell(
-            [tf.contrib.rnn.DropoutWrapper(
-                tf.contrib.rnn.GRUCell(num_units = n_units),
-                output_keep_prob = self._keep_prob_tensor)
-            for _ in range(n_cells)]
-        )
+    def multiple_gru_cells(self, n_units, n_cells, name):
+        cells_list = [tf.contrib.rnn.GRUCell(num_units = n_units, name = name + "_" + str(ind)) for ind in range(n_cells)]
+        cells_list_dropout = [tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob = self._keep_prob_tensor) for cell in cells_list]
+        cells_weights_list = [cell.get_weights() for cell in cells_list]
+        return cells_weights_list, tf.contrib.rnn.MultiRNNCell(cells_list_dropout)
 
     # def multiple_lstm_layers(self, cell, x):
     #     output, final_states = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32)
@@ -134,7 +139,6 @@ class SimpleRNN:
             val_metric = 'acc'
     ):
         # with self._g.as_default():
-
         self._sess = tf.Session()
         self._sess.run(self._init_op)
 
@@ -143,6 +147,11 @@ class SimpleRNN:
         if weight_load_path is not None:
             self._saver.restore(self._sess, save_path = weight_load_path)
             print("Weights loaded successfully.")
+        elif self._pretrained_weight_path is not None:
+            self._cell_saver = tf.train.Saver(self._save_dict)
+            self._cell_saver.restore(self._sess, save_path = self._pretrained_weight_path)
+            print("Pretrained weight loaded successfully.")
+
 
         cur_val_loss = 1000
         cur_val_acc = 0
@@ -258,6 +267,7 @@ class SimpleRNN:
 
         return (prob > threshold).astype(np.int32)
 
+    # Adapt from https://danijar.com/variable-sequence-lengths-in-tensorflow/
     def length(self, sequence):
         used = tf.sign(tf.reduce_max(tf.abs(sequence), 2))
         length = tf.reduce_sum(used, 1)
@@ -267,5 +277,10 @@ class SimpleRNN:
     def save_weight(self, weight_save_path):
         save_path = self._saver.save(self._sess, save_path=weight_save_path)
         print("Model's weights saved at %s" % save_path)
+
+    def load_weight(self, weight_load_path):
+        self._saver.restore(self._sess, save_path=weight_load_path)
+        print("Weights loaded successfully.")
+
 
 

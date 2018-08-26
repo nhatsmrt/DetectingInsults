@@ -5,24 +5,18 @@ import re, os
 import nltk
 from nltk.corpus import stopwords
 from Source import\
-    SimpleRNN, BiRNN, StackedBiRNN, RNNKeras, AttentionalRNN, AttentionalBiRNN, Simple1DConvNet, \
+    Seq2Seq, \
     accuracy, preprocess
-from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.model_selection import train_test_split
 
 
-## DEFINE PATHS:
+# DEFINE PATHS:
 path = Path()
 d = path.resolve()
 data_path = str(d) + "/Data/"
-train_path = data_path + "train.csv"
-test_path = data_path + "test_with_solutions.csv"
+pretrain_path = data_path + "imdb_master.csv"
 glove_path = os.path.join(data_path, "glove.6B.50d.txt")
-weight_save_path = str(d) + "/weights/BiRNN_augmented.ckpt"
-pretrained_weight_path = str(d) + "/weights/RNN_pretrained.ckpt"
-# weight_load_path = str(d) + "/weights/model_stacked_birnn.ckpt"
-weight_load_path = None
-augment_path = data_path + "/augmented_data_yandex_0.csv"
+weight_save_path = str(d) + "/weights/RNN_pretrained.ckpt"
 
 RANDOM_STATE = 42
 
@@ -63,63 +57,44 @@ embedding_weights.append(np.random.rand(EMBEDDING_DIMENSION))
 embedding_weights = np.asarray(embedding_weights, dtype = np.float32)
 VOCAB_SIZE = embedding_weights.shape[0]
 
-# READ AND PREPROCESS DATA:
-### Read csv files into pd dataframes:
-df_train = pd.read_csv(train_path)
-df_augmented = pd.read_csv(augment_path)
 
-y = df_train["Insult"].values.reshape(-1, 1)
-y_augmented = np.append(
-    y,
-    df_augmented["Insult"].values.reshape(-1, 1),
-    axis = 0
-)
-X_raw = df_train["Comment"].values
-X_augmented_raw = np.append(
-    X_raw,
-    df_augmented["Comment"].values,
-    axis = 0
-)
+# READ AND PREPROCESS DATA:
+## Read csv files into pd dataframes:
+df_pretrain = pd.read_csv(pretrain_path, encoding = "ISO-8859-1")
+X_raw = df_pretrain["review"].values
+len_array_pretrain = []
+for ind in range(X_raw.shape[0]):
+    len_array_pretrain.append(len(X_raw[ind]))
+len_array_pretrain = np.array(len_array_pretrain)
+ind = np.where(len_array_pretrain <= 200)[0]
+X_raw = X_raw[ind]
+print(X_raw.shape)
+
 seq_len = 3000
-X_raw = preprocess(X_augmented_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
+X_raw = preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
+y = X_raw
+
 X_train, X_val, y_train, y_val = train_test_split(
     X_raw,
-    y_augmented,
+    y,
     train_size = 0.95,
     random_state = RANDOM_STATE
 )
 
-# DEFINE AND TRAIN MODEL:
-model = SimpleRNN(
+# CREATE MODEL:
+model = Seq2Seq(
     keep_prob = 0.5,
     seq_len = seq_len,
     embedding_matrix = embedding_weights,
-    embed_size = EMBEDDING_DIMENSION,
-    pretrained_weight_path = pretrained_weight_path
+    vocab_size = VOCAB_SIZE,
+    embed_size = EMBEDDING_DIMENSION
 )
 
 model.fit(
     X_train,
-    y_train,
     X_val,
-    y_val,
-    num_epochs = 100,
+    num_epochs = 1,
     patience = 5,
     weight_save_path = weight_save_path,
-    weight_load_path = None,
-    val_metric = 'loss'
 )
 
-
-## VALIDATE MODEL PERFORMANCE:
-predictions = model.predict(X_val)
-print("Final Validation Accuracy:")
-print(accuracy(predictions, y_val))
-print(confusion_matrix(
-    y_true = y_val.reshape(y_val.shape[0]),
-    y_pred = predictions.reshape(predictions.shape[0]))
-)
-print(roc_auc_score(
-    y_true = y_val.reshape(y_val.shape[0]),
-    y_score = predictions.reshape(predictions.shape[0]))
-)

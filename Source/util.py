@@ -72,6 +72,7 @@ def preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, stopwords_list = None):
             else:
                 X[ind, :] = np.array(word_array).astype(np.int32)[0:seq_len]
 
+
     return X
 
 def translationAugmentYandex(X, y, key, export_path, begin = 0):
