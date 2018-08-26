@@ -67,60 +67,31 @@ class Simple1DConvNet:
             self._X,
             name = "X_embed_pretrained"
         ))
+        # embedding_trained = tf.Variable(
+        #         initial_value = tf.random_uniform(
+        #             shape = [self._n_words, self._embed_size],
+        #             minval = -1,
+        #             maxval = 1),
+        #             name = "embedding_trained"
+        # )
+        # self._X_embed_trained = tf.nn.embedding_lookup(embedding_trained, self._X, name = "X_embed_trained")
+        # self._X_embed = tf.stack([self._X_embed_trained, self._X_embed_pretrained], axis = -1)
+        self._X_embed_pretrained_expanded = tf.expand_dims(self._X_embed_pretrained, axis = -1)
 
-        embedding_trained = tf.Variable(
-                initial_value = tf.random_uniform(
-                    shape = [self._n_words, self._embed_size],
-                    minval = -1,
-                    maxval = 1),
-                    name = "embedding_trained"
+
+        self._conv_module = self.convolutional_module(
+            self._X_embed_pretrained_expanded,
+            length = self.length(self._X_embed_pretrained),
+            name = "conv_module",
+            inp_channel = 1,
+            inp_size = self._embed_size,
+            filter_sizes = [3, 4, 5],
+            n_filters = [128, 128, 128],
+            strides = [1, 1, 1]
         )
-        self._X_embed_trained = tf.nn.embedding_lookup(embedding_trained, self._X, name = "X_embed_trained")
 
-        self._X_embed = tf.concat([self._X_embed_trained, self._X_embed_pretrained], axis = -1)
-
-
-        self._conv_layer_1 = self.conv_1d_layer(
-            self._X_embed,
-            name = "conv_layer_1",
-            stride = self._embed_size,
-            filter_width = 3,
-            inp_channel = self._embed_size * 2,
-            op_channel = 512
-        )
-        self._conv_layer_1_pooled = self.max_over_time_pooling(self._conv_layer_1)
-
-        # self._conv_layer_2 = self.conv_1d_layer(
-        #     self._conv_layer_1_pooled,
-        #     name = "conv_layer_2",
-        #     stride = self._embed_size,
-        #     filter_width = 3 * self._embed_size,
-        #     inp_channel = 16,
-        #     op_channel = 32
-        # )
-        # self._conv_layer_2_pooled = tf.layers.max_pooling1d(
-        #     self._conv_layer_2,
-        #     pool_size = 2,
-        #     strides = 2 * self._embed_size
-        # )
-        #
-        # self._conv_layer_3 = self.conv_1d_layer(
-        #     self._conv_layer_2_pooled,
-        #     name = "conv_layer_3",
-        #     stride = self._embed_size,
-        #     filter_width = 3 * self._embed_size,
-        #     inp_channel = 32,
-        #     op_channel = 64
-        # )
-        # self._conv_layer_3_pooled = tf.layers.max_pooling1d(
-        #     self._conv_layer_3,
-        #     pool_size = 2,
-        #     strides = 2 * self._embed_size
-        # )
-
-
-        self._flat = tf.reshape(self._conv_layer_1_pooled, shape = [-1, 512], name = "flat")
-        self._fc1 = self.feed_forward(self._flat, name = "op", inp_channel = 512, op_channel = 1)
+        self._flat = tf.reshape(self._conv_module, shape = [-1, 384], name = "flat")
+        self._fc1 = self.feed_forward(self._flat, name = "op", inp_channel = 384, op_channel = 1)
         self._op = tf.nn.dropout(self._fc1, keep_prob = self._keep_prob_tensor)
 
         self._op_prob = tf.nn.sigmoid(self._op, name = "prob")
@@ -268,10 +239,58 @@ class Simple1DConvNet:
         return h_conv
 
 
-    def max_over_time_pooling(self, x):
-        return tf.reduce_max(x, axis = -2)
+    def max_over_time_pool(self, x):
+        return tf.reduce_max(x, axis = 1)
 
+    def convolutional_layer(
+            self, x, name, inp_channel, op_channel,
+            filter_height = 3, filter_width = 3, stride = 1,
+            padding = 'VALID', pad = 0, dropout = False, not_activated = False):
+        if pad != 0:
+            x_padded = tf.pad(x, self.create_pad(4, pad))
+        else:
+            x_padded = x
+        W_conv = tf.get_variable(
+            "W_" + name,
+            shape = [filter_height, filter_width, inp_channel, op_channel],
+            initializer = tf.keras.initializers.he_normal()
+        )
+        b_conv = tf.get_variable("b_" + name, initializer = tf.zeros(op_channel))
+        z_conv = tf.nn.conv2d(x_padded, W_conv, strides = [1, stride, 1, 1], padding = padding) + b_conv
+        a_conv = tf.nn.relu(z_conv)
+        h_conv = tf.layers.batch_normalization(a_conv, training = self._is_training)
+        if dropout:
+            a_conv_dropout = tf.nn.dropout(a_conv, keep_prob = self._keep_prob)
+            return a_conv_dropout
+        if not_activated:
+            return z_conv
+        return h_conv
 
+    def max_pool_2x2(self, x):
+        return tf.nn.max_pool(x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+
+    def convolutional_module(self, x, name, length, inp_channel, inp_size, filter_sizes, n_filters, strides):
+        conv_layers = []
+        for ind in range(len(filter_sizes)):
+            filter_size = filter_sizes[ind]
+            n_filter = n_filters[ind]
+            stride = strides[ind]
+
+            conv_layer = self.convolutional_layer(
+                x,
+                name = name + "_conv_" + str(ind),
+                filter_height = filter_size,
+                filter_width = inp_size,
+                stride = stride,
+                inp_channel = inp_channel,
+                op_channel = n_filter
+            )
+
+            conv_layer_pooled_over_time = self.max_over_time_pool(conv_layer)
+            conv_layers.append(conv_layer_pooled_over_time)
+
+        concat = tf.concat(conv_layers, axis = -1)
+        return concat
 
     def feed_forward(self, x, name, inp_channel, op_channel, op_layer = False):
         W = tf.get_variable("W_" + name, shape = [inp_channel, op_channel], dtype = tf.float32, initializer = tf.contrib.layers.xavier_initializer())
@@ -306,8 +325,6 @@ class Simple1DConvNet:
             print('Training Characters Classifier for ' + str(num_epochs) +  ' epochs')
             self.run_model(self._sess, self._op_prob, self._mean_loss, X, y, num_epochs, batch_size, 1, self._train_step, weight_save_path = weight_save_path, patience = patience, plot_losses = plot_losses)
 
-
-
     def create_pad(self, n, pad):
         pad_matrix = [[0, 0]]
         for i in range(n-2):
@@ -315,8 +332,12 @@ class Simple1DConvNet:
         pad_matrix.append([0, 0])
         return tf.constant(pad_matrix)
 
-
-
-
     def evaluate (self, X, y):
         self.run_model(self._sess, self._op_prob, self._mean_loss, X, y, 1, 16)
+
+    def length(self, sequence):
+        used = tf.sign(tf.reduce_max(tf.abs(sequence), 2))
+        length = tf.reduce_sum(used, 1)
+        length = tf.cast(length, tf.int32)
+        return length
+
