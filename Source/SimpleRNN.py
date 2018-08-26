@@ -130,7 +130,8 @@ class SimpleRNN:
             weight_save_path = None,
             weight_load_path = None,
             batch_size = 16,
-            patience = 3
+            patience = 3,
+            val_metric = 'acc'
     ):
         # with self._g.as_default():
 
@@ -196,29 +197,31 @@ class SimpleRNN:
                 print("Validation loss: " + str(val_loss))
                 print("Validation accuracy: " + str(val_acc))
 
-                # if val_loss < cur_val_loss:
-                #     cur_val_loss = val_loss
-                #     print("Validation loss decreases.")
-                #     if weight_save_path is not None:
-                #         save_path = self._saver.save(self._sess, save_path = weight_save_path)
-                #         print("Model's weights saved at %s" % save_path)
-                #     p = 0
-                # else:
-                #     p += 1
-                #     if p > patience:
-                #         return
 
-                if val_acc > cur_val_acc:
-                    cur_val_acc = val_acc
-                    print("Validation accuracy increases.")
-                    if weight_save_path is not None:
-                        save_path = self._saver.save(self._sess, save_path = weight_save_path)
-                        print("Model's weights saved at %s" % save_path)
-                    p = 0
-                else:
-                    p += 1
-                    if p > patience:
-                        return
+                if val_metric == 'acc':
+                    if val_acc > cur_val_acc:
+                        cur_val_acc = val_acc
+                        print("Validation accuracy increases.")
+                        if weight_save_path is not None:
+                            save_path = self._saver.save(self._sess, save_path = weight_save_path)
+                            print("Model's weights saved at %s" % save_path)
+                        p = 0
+                    else:
+                        p += 1
+                        if p > patience:
+                            return
+                elif val_metric == 'loss':
+                    if val_loss < cur_val_loss:
+                        cur_val_loss = val_loss
+                        print("Validation loss decreases.")
+                        if weight_save_path is not None:
+                            save_path = self._saver.save(self._sess, save_path = weight_save_path)
+                            print("Model's weights saved at %s" % save_path)
+                        p = 0
+                    else:
+                        p += 1
+                        if p > patience:
+                            return
 
             else:
                 if weight_save_path is not None:
@@ -260,4 +263,9 @@ class SimpleRNN:
         length = tf.reduce_sum(used, 1)
         length = tf.cast(length, tf.int32)
         return length
+
+    def save_weight(self, weight_save_path):
+        save_path = self._saver.save(self._sess, save_path=weight_save_path)
+        print("Model's weights saved at %s" % save_path)
+
 
