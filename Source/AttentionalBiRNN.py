@@ -7,6 +7,7 @@ class AttentionalBiRNN(BiRNN, AttentionalRNN):
     def __init__(
             self, n_classes = 2,
             embedding_matrix = None,
+            pretrained_weight_path=None,
             keep_prob = 0.5,
             use_gpu = False,
             seq_len = 200,
@@ -59,6 +60,7 @@ class AttentionalBiRNN(BiRNN, AttentionalRNN):
             initial_state_bw = self._initial_state_bw,
             sequence_length=self.length(self._X_embed)
         )
+        self._pretrain_weights_list = tf.trainable_variables()[1:]
         self._lstm_op_concat = tf.concat(self._lstm_op, 2)
 
         # Final feedforward layer and output:
@@ -85,9 +87,4 @@ class AttentionalBiRNN(BiRNN, AttentionalRNN):
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
 
-        self._save_dict = dict()
-        # self._save_dict['embedding'] = embedding
-        for cell_ind in range(1):
-            self._save_dict['gru_fw' + str(cell_ind)] = self._cells_fw_weights_list[cell_ind]
-            self._save_dict['gru_bw' + str(cell_ind)] = self._cells_bw_weights_list[cell_ind]
 

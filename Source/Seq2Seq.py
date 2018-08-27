@@ -29,14 +29,7 @@ class Seq2Seq:
             with tf.device('/device:CPU:0'):
                 self.create_network()
 
-
-    # def lstm_layer(self, x, cell):
-    #     output, final_states = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32)
-    #     return output, final_states
-
     def create_network(self):
-        self._sess = tf.Session()
-        self._init_op_cell = tf.global_variables_initializer()
         self._X = tf.placeholder(shape=[None, self._seq_len], dtype=tf.int32)
         self._batch_size = tf.placeholder(shape=[], dtype=tf.int32)
         self._is_training = tf.placeholder(tf.bool)
@@ -58,9 +51,7 @@ class Seq2Seq:
 
         # LSTM Layer:
         # self._cell = self.multiple_lstm_cells(n_units = 512, n_layers = 3)
-        n_cells = 1
-        self._cell = self.multiple_gru_cells(n_units=128, n_cells = n_cells, name = "gru")
-        self._sess.run(self._init_op_cell)
+        self._cell = self.multiple_gru_cells(n_units=128, n_cells = 1, name = "gru")
         self._initial_state = self._cell.zero_state(batch_size=self._batch_size, dtype=tf.float32)
         self._encoder_op, self._encoder_final_state = tf.nn.dynamic_rnn(
             cell = self._cell,
@@ -126,7 +117,7 @@ class Seq2Seq:
             patience = 3,
     ):
         # with self._g.as_default():
-
+        self._sess = tf.Session()
         self._sess.run(self._init_op)
         self._saver = tf.train.Saver(self._save_list)
 

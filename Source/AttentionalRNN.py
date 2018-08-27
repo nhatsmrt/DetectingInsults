@@ -8,6 +8,7 @@ class AttentionalRNN(SimpleRNN):
     def __init__(
             self, n_classes = 2,
             embedding_matrix = None,
+            pretrained_weight_path=None,
             keep_prob = 0.5,
             use_gpu = False,
             seq_len = 200,

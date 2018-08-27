@@ -34,11 +34,8 @@ class SimpleRNN:
             with tf.device('/device:CPU:0'):
                 self.create_network()
 
-            self._saver = tf.train.Saver()
-            self._init_op = tf.global_variables_initializer()
-
-
-
+        self._saver = tf.train.Saver()
+        self._init_op = tf.global_variables_initializer()
 
     # def lstm_layer(self, x, cell):
     #     output, final_states = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32)

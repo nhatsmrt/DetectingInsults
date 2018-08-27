@@ -8,39 +8,14 @@ class BiRNN(SimpleRNN):
     def __init__(
             self, n_classes = 2,
             embedding_matrix = None,
+            pretrained_weight_path=None,
             keep_prob = 0.8,
             use_gpu = False,
             seq_len = 200,
-            n_words = 3000,
+            vocab_size = 3000,
             embed_size = 300,
     ):
-        self._keep_prob = keep_prob
-        self._keep_prob_tensor = tf.placeholder(tf.float32, name = "keep_prob_tens")
-        self._n_classes = n_classes
-        self._seq_len = seq_len
-        self._n_words = n_words
-        self._embed_size = embed_size
-        self._embedding_matrix = embedding_matrix
-
-        self._g = tf.Graph()
-
-        # with self._g.as_default():
-        if use_gpu:
-            with tf.device('/device:GPU:0'):
-                self.create_network()
-        else:
-            with tf.device('/device:CPU:0'):
-                self.create_network()
-
-        self._saver = tf.train.Saver()
-        self._init_op = tf.global_variables_initializer()
-
-
-
-
-    # def lstm_layer(self, x, cell):
-    #     output, final_states = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32)
-    #     return output, final_states
+        super().__init__(n_classes, embedding_matrix, pretrained_weight_path, keep_prob, use_gpu, seq_len, vocab_size, embed_size)
 
     def create_network(self):
         self._X = tf.placeholder(shape = [None, self._seq_len], dtype = tf.int32)
@@ -55,7 +30,7 @@ class BiRNN(SimpleRNN):
         else:
             embedding = tf.Variable(
                 initial_value = tf.random_uniform(
-                    shape = [self._n_words, self._embed_size],
+                    shape = [self._vocab_size, self._embed_size],
                     minval = -1,
                     maxval = 1),
                 name="embedding")
@@ -97,11 +72,6 @@ class BiRNN(SimpleRNN):
 
         self._optimizer = tf.train.AdamOptimizer()
         self._train_step = self._optimizer.minimize(self._mean_loss)
-
-
-
-
-
 
     def fit(
             self, X, y, X_val, y_val,
