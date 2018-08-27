@@ -129,3 +129,17 @@ def translationAugmentYandex(X, y, key, export_path, begin = 0):
     df.to_csv(path_or_buf = export_path)
 
     return np.array(X_ret)
+
+def find_threshold(pred_proba, y_true):
+    cur_acc = 0
+    cur_thres = 0
+    for ind in range(pred_proba.shape[0] - 1):
+        threshold = (pred_proba[ind][0] + pred_proba[ind + 1][0]) / 2
+        pred = (pred_proba > threshold).astype(np.int32)
+        acc = accuracy(pred, y_true)
+        if acc > cur_acc:
+            cur_thres = threshold
+            cur_acc = acc
+
+    return cur_thres
+

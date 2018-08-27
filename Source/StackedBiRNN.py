@@ -212,7 +212,7 @@ class StackedBiRNN(SimpleRNN):
                     save_path = self._saver.save(self._sess, save_path=weight_save_path)
                     print("Model's weights saved at %s" % save_path)
 
-    def predict(self, X, return_proba = False, threshold = 0.5, batch_size = 32):
+    def predict(self, X, return_proba = False, threshold = 0.5, batch_size = 32, verbose = True):
         if batch_size is None:
             batch_size = X.shape[0]
 
@@ -221,9 +221,11 @@ class StackedBiRNN(SimpleRNN):
         train_indicies = np.arange(X.shape[0])
         prob = np.zeros((X.shape[0], 1), dtype = np.float32)
 
-        print("Begin Predicting:")
+        if verbose:
+            print("Begin Predicting:")
         for i in range(int(math.ceil(X.shape[0] // batch_size))):
-            print("Batch " + str(i + 1))
+            if verbose:
+                print("Batch " + str(i + 1))
             start_idx = (i * batch_size) % X.shape[0]
             idx = train_indicies[start_idx:start_idx + batch_size]
             actual_batch_size = X[idx, :].shape[0]
