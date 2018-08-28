@@ -80,7 +80,12 @@ class SimpleRNN:
 
         # Final feedforward layer and output:
         # self._fc1 = self.feedforward_layer(self._lstm_op_reshape, n_inp = 128, n_op = 256,  name = "fc1")
-        self._fc = self.feedforward_layer(self._final_state_reshape, n_inp = 128, n_op = 1, final_layer = True, name = "fc")
+        self._fc = self.feedforward_layer(
+            self._final_state_reshape,
+            n_inp = 128, n_op = 1,
+            final_layer = True,
+            name = "fc"
+        )
         self._op = tf.nn.sigmoid(self._fc)
 
         self._y = tf.placeholder(name = "y", shape = [None, 1], dtype = tf.float32)
@@ -237,7 +242,12 @@ class SimpleRNN:
                         if p > patience:
                             return
                 elif val_metric == 'roc-auc':
-                    predictions = self.predict(X_val, batch_size = X_val.shape[0], return_proba = True, verbose = False)
+                    predictions = self.predict(
+                        X_val,
+                        batch_size = X_val.shape[0],
+                        return_proba = True,
+                        verbose = False
+                    )
                     val_roc_auc = roc_auc_score(
                         y_true = y_val.reshape(y_val.shape[0]),
                         y_score = predictions.reshape(predictions.shape[0])
@@ -316,8 +326,10 @@ class SimpleRNN:
                                         tf.transpose(target), 0, -1)
 
         n_terms = tf.reduce_sum(target) * (tf.cast(tf.shape(target)[0], tf.float32) - tf.reduce_sum(target))
+        if n_terms == 0:
+            return 0
 
-        return - tf.reduce_sum(tf.nn.sigmoid(op_pair_diff * mask)) / (n_terms + 1e-8)
+        return - tf.reduce_sum(tf.log(tf.nn.sigmoid(op_pair_diff * mask))) / (n_terms + 1e-8)
 
 
 

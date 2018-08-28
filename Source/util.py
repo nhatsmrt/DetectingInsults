@@ -130,16 +130,34 @@ def translationAugmentYandex(X, y, key, export_path, begin = 0):
 
     return np.array(X_ret)
 
-def find_threshold(pred_proba, y_true):
+def find_threshold(pred_proba, y_true, metric = accuracy):
     cur_acc = 0
     cur_thres = 0
     for ind in range(pred_proba.shape[0] - 1):
         threshold = (pred_proba[ind][0] + pred_proba[ind + 1][0]) / 2
         pred = (pred_proba > threshold).astype(np.int32)
-        acc = accuracy(pred, y_true)
+        acc = metric(pred, y_true)
         if acc > cur_acc:
             cur_thres = threshold
             cur_acc = acc
 
     return cur_thres
+
+def write_predictions(predictions_prob, sample_submission_path, submission_path):
+    df_submission = pd.read_csv(sample_submission_path)
+    df_submission["Insult"] = predictions_prob
+    df_submission.to_csv(submission_path, index = False)
+
+def write_results(write_test_result_path, OPTIMAL_THRESHOLD, acc, cfs_mat, roc_auc):
+    f = open(write_test_result_path, mode='w')
+    f.write("Optimal threshold: \n")
+    f.write(str(OPTIMAL_THRESHOLD) + "\n")
+    f.write("Test Accuracy: \n")
+    f.write(str(acc) + "\n")
+    f.write("Confusion Matrix: \n")
+    f.write(str(cfs_mat) + "\n")
+    f.write("ROC AUC: \n")
+    f.write(str(roc_auc) + "\n")
+    f.close()
+
 

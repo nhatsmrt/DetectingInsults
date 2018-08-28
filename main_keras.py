@@ -6,8 +6,10 @@ import nltk
 from nltk.corpus import stopwords
 from Source import\
     RNNKeras, \
-    accuracy, preprocess
+    accuracy, preprocess, find_threshold
 from keras.callbacks import EarlyStopping, ModelCheckpoint
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, confusion_matrix
 
 
 ## DEFINE PATHS:
@@ -28,7 +30,7 @@ RANDOM_STATE = 42
 ## Adapt from https://damienpontifex.com/2017/10/27/using-pre-trained-glove-embeddings-in-tensorflow/
 PAD_TOKEN = 0
 embedding_weights = []
-word2idx = { 'PAD': PAD_TOKEN }
+word2idx = { '<pad>': PAD_TOKEN }
 with open(glove_path, 'r') as file:
     for ind, line in enumerate(file):
         values = line.split()
@@ -41,11 +43,14 @@ with open(glove_path, 'r') as file:
             break
 
 EMBEDDING_DIMENSION = len(embedding_weights[0])
-## Insert random PAD weights at index 0:
-embedding_weights.insert(0, np.random.rand(EMBEDDING_DIMENSION))
+## Insert zero PAD weights at index 0:
+embedding_weights.insert(0, np.zeros(EMBEDDING_DIMENSION))
 
-
-## Insert other useful tokens:
+## Insert other useful tokens:\
+### Unknown token:
+UNKNOWN_TOKEN = len(embedding_weights)
+word2idx['UNK'] = UNKNOWN_TOKEN
+embedding_weights.append(np.mean(embedding_weights, axis = 0))
 
 ### All-uppercase token:
 word2idx['<upp>'] = len(embedding_weights)
@@ -54,15 +59,6 @@ embedding_weights.append(np.random.rand(EMBEDDING_DIMENSION))
 ### Number token:
 word2idx['<num>'] = len(embedding_weights)
 embedding_weights.append(np.random.rand(EMBEDDING_DIMENSION))
-
-### Unknown token:
-UNKNOWN_TOKEN = len(embedding_weights)
-word2idx['UNK'] = UNKNOWN_TOKEN
-embedding_weights.append(np.random.rand(EMBEDDING_DIMENSION))
-
-### Pad token:
-word2idx['<pad>'] = len(embedding_weights)
-embedding_weights.append(np.zeros(EMBEDDING_DIMENSION))
 
 embedding_weights = np.asarray(embedding_weights, dtype = np.float32)
 VOCAB_SIZE = embedding_weights.shape[0]
@@ -85,16 +81,25 @@ X_augmented_raw = np.append(
 )
 seq_len = 500
 # X_train = preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
-X_augmented = preprocess(X_augmented_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
+X_processed = preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
+X_train, X_val, y_train, y_val = train_test_split(
+    X_processed,
+    y,
+    stratify = y,
+    test_size = 0.05,
+    random_state=RANDOM_STATE
+)
 
 checkpoint = ModelCheckpoint(
     filepath = weight_save_path,
-    monitor = 'val_loss', verbose = 1,
-    save_best_only = True)
-early = EarlyStopping(monitor = "val_loss", mode = "min", patience = 3)
+    monitor = 'val_pairwise_loss', verbose = 1,
+    mode = 'min',
+    save_best_only = True
+)
+early = EarlyStopping(monitor = "val_pairwise_loss", mode = "min", patience = 3)
 callbacks_list = [checkpoint, early]
-batch_size = 2
-epochs = 10
+batch_size = 16
+epochs = 100
 
 model = RNNKeras(
     embeddingMatrix = embedding_weights,
@@ -103,9 +108,31 @@ model = RNNKeras(
     maxlen = seq_len
 )
 model.fit(
-    X_augmented, y_augmented,
+    X_train, y_train,
     batch_size = batch_size,
     epochs = epochs,
     validation_split = 0.1,
-    callbacks = callbacks_list
+    callbacks = callbacks_list,
+    validation_data = (X_val, y_val)
 )
+
+# FINAL VALIDATION:
+model.load_weights(filepath = weight_save_path)
+predictions_prob = model.predict(X_val)
+
+optimal_threshold = find_threshold(predictions_prob, y_val)
+print("Optimal Threshold: ")
+print(optimal_threshold)
+predictions = (predictions_prob > optimal_threshold).astype(np.int32)
+
+print("Final Validation Accuracy:")
+print(accuracy(predictions, y_val))
+print(confusion_matrix(
+    y_true = y_val.reshape(y_val.shape[0]),
+    y_pred = predictions.reshape(predictions.shape[0]))
+)
+print(roc_auc_score(
+    y_true = y_val.reshape(y_val.shape[0]),
+    y_score = predictions.reshape(predictions.shape[0]))
+)
+

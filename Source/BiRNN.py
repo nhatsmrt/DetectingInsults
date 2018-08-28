@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from sklearn.metrics import roc_auc_score
 import math
 from .SimpleRNN import SimpleRNN
 
@@ -65,7 +66,8 @@ class BiRNN(SimpleRNN):
         self._op = tf.nn.sigmoid(self._fc)
 
         self._y = tf.placeholder(name = "y", shape = [None, 1], dtype = tf.float32)
-        self._mean_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels = self._y, logits = self._fc))
+        # self._mean_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels = self._y, logits = self._fc))
+        self._mean_loss = self.cost_pairwise(self._op, self._y)
         self._correct_pred = tf.equal(tf.round(self._op), self._y)
         self._accuracy = tf.reduce_mean(tf.cast(self._correct_pred, tf.float32))
 
@@ -101,6 +103,7 @@ class BiRNN(SimpleRNN):
 
         cur_val_loss = 1000
         cur_val_acc = 0
+        cur_val_roc_auc = 0
         p = 0
 
         for e in range(num_epochs):
@@ -140,8 +143,17 @@ class BiRNN(SimpleRNN):
                 state_fw = states[0]
                 state_bw = states[1]
 
+                predictions = self.predict(X[idx, :], return_proba = True, verbose = False)
+                try:
+                    roc_auc = roc_auc_score(
+                        y_true = y[idx].reshape(y[idx].shape[0]),
+                        y_score = predictions.reshape(predictions.shape[0])
+                    )
+                except ValueError:
+                    roc_auc = 0
+
                 if iter % print_every == 0:
-                    print("Iteration " + str(iter) + " with loss " + str(loss) + " and accuracy " + str(acc))
+                    print("Iteration " + str(iter) + " with loss " + str(loss) + " and accuracy " + str(acc) + " and roc-auc " + str(roc_auc))
 
                 iter += 1
 
@@ -187,6 +199,25 @@ class BiRNN(SimpleRNN):
                         p += 1
                         if p > patience:
                             return
+                elif val_metric == 'roc-auc':
+                    predictions = self.predict(X_val, batch_size = X_val.shape[0], return_proba = True, verbose = False)
+                    val_roc_auc = roc_auc_score(
+                        y_true = y_val.reshape(y_val.shape[0]),
+                        y_score = predictions.reshape(predictions.shape[0])
+                    )
+                    if val_roc_auc > cur_val_roc_auc:
+                        cur_val_roc_auc = val_roc_auc
+                        print("Validation ROC-AUC: " + str(val_roc_auc))
+                        print("Validation ROC-AUC increases.")
+                        if weight_save_path is not None:
+                            save_path = self._saver.save(self._sess, save_path = weight_save_path)
+                            print("Model's weights saved at %s" % save_path)
+                        p = 0
+                    else:
+                        p += 1
+                        if p > patience:
+                            return
+
             else:
                 if weight_save_path is not None:
                     save_path = self._saver.save(self._sess, save_path=weight_save_path)
