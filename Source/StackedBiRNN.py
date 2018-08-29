@@ -212,7 +212,7 @@ class StackedBiRNN(SimpleRNN):
                     save_path = self._saver.save(self._sess, save_path=weight_save_path)
                     print("Model's weights saved at %s" % save_path)
 
-    def predict(self, X, return_proba = False, threshold = 0.5, batch_size = 32, verbose = True):
+    def predict(self, X, return_proba = False, threshold = 0.5, batch_size = 32, verbose = True, use_pairwise_loss = False):
         if batch_size is None:
             batch_size = X.shape[0]
 
@@ -220,10 +220,10 @@ class StackedBiRNN(SimpleRNN):
         states_bw = self._sess.run(self._initial_states_bw, feed_dict={self._batch_size: batch_size})
         train_indicies = np.arange(X.shape[0])
 
-        # Find the score of the imaginary class (equals to logit of the threshold)
+        # Find the score of the imaginary class (equals to logit of the threshold) (for pairwise loss)
         imaginary_class_score = np.log(threshold/(1 - threshold))
-        true_op = tf.nn.sigmoid(self._fc - imaginary_class_score)
-        true_prob = np.zeros((X.shape[0], 1), dtype = np.float32)
+        true_prob = tf.nn.sigmoid(self._fc - imaginary_class_score)
+        prob = np.zeros((X.shape[0], 1), dtype = np.float32)
 
         if verbose:
             print("Begin Predicting:")
@@ -244,12 +244,19 @@ class StackedBiRNN(SimpleRNN):
                 feed_dict[self._initial_states_fw[l]] = states_fw[l]
                 feed_dict[self._initial_states_bw[l]] = states_bw[l]
 
-            true_prob[idx, :] = self._sess.run(true_op, feed_dict = feed_dict)
+            if use_pairwise_loss:
+                prob[idx, :] = self._sess.run(true_prob, feed_dict=feed_dict)
+            else:
+                prob[idx, :] = self._sess.run(self._op, feed_dict=feed_dict)
 
         if return_proba:
-            return true_prob
+            return prob
 
-        return (true_prob > 0.5).astype(np.int32)
+        if use_pairwise_loss:
+            return (prob > 0.5).astype(np.int32)
+
+        return (prob > threshold).astype(np.int32)
+
 
 
 
