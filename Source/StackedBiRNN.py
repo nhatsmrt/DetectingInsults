@@ -219,7 +219,11 @@ class StackedBiRNN(SimpleRNN):
         states_fw = self._sess.run(self._initial_states_fw, feed_dict={self._batch_size: batch_size})
         states_bw = self._sess.run(self._initial_states_bw, feed_dict={self._batch_size: batch_size})
         train_indicies = np.arange(X.shape[0])
-        prob = np.zeros((X.shape[0], 1), dtype = np.float32)
+
+        # Find the score of the imaginary class (equals to logit of the threshold)
+        imaginary_class_score = np.log(threshold/(1 - threshold))
+        true_op = tf.nn.sigmoid(self._fc - imaginary_class_score)
+        true_prob = np.zeros((X.shape[0], 1), dtype = np.float32)
 
         if verbose:
             print("Begin Predicting:")
@@ -240,12 +244,12 @@ class StackedBiRNN(SimpleRNN):
                 feed_dict[self._initial_states_fw[l]] = states_fw[l]
                 feed_dict[self._initial_states_bw[l]] = states_bw[l]
 
-            prob[idx, :] = self._sess.run(self._op, feed_dict = feed_dict)
+            true_prob[idx, :] = self._sess.run(true_op, feed_dict = feed_dict)
 
         if return_proba:
-            return prob
+            return true_prob
 
-        return np.round(prob)
+        return (true_prob > 0.5).astype(np.int32)
 
 
 

@@ -230,7 +230,12 @@ class BiRNN(SimpleRNN):
         state_fw = self._sess.run(self._initial_state_fw, feed_dict={self._batch_size: batch_size})
         state_bw = self._sess.run(self._initial_state_bw, feed_dict={self._batch_size: batch_size})
         train_indicies = np.arange(X.shape[0])
-        prob = np.zeros((X.shape[0], 1), dtype = np.float32)
+
+        # Find the score of the imaginary class (equals to logit of the threshold)
+        imaginary_class_score = np.log(threshold/(1 - threshold))
+        true_op = tf.nn.sigmoid(self._fc - imaginary_class_score)
+        true_prob = np.zeros((X.shape[0], 1), dtype = np.float32)
+
 
         if verbose:
             print("Begin Predicting:")
@@ -249,12 +254,12 @@ class BiRNN(SimpleRNN):
                 self._initial_state_bw: state_bw,
                 self._is_training: False
             }
-            prob[idx, :] = self._sess.run(self._op, feed_dict = feed_dict)
+            true_prob[idx, :] = self._sess.run(true_op, feed_dict = feed_dict)
 
         if return_proba:
-            return prob
+            return true_prob
 
-        return (prob > threshold).astype(np.int32)
+        return (true_prob > 0.5).astype(np.int32)
 
 
 

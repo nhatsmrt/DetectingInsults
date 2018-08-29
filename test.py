@@ -10,7 +10,7 @@ from Source import\
 from sklearn.metrics import confusion_matrix, roc_auc_score
 
 
-OPTIMAL_THRESHOLD = 0.9421564340591431
+OPTIMAL_THRESHOLD = 0.9227396249771118
 
 ## DEFINE PATHS:
 path = Path()
@@ -20,7 +20,7 @@ train_path = data_path + "train.csv"
 test_path = data_path + "test_with_solutions.csv"
 glove_path = os.path.join(data_path, "glove.6B.50d.txt")
 weight_save_path = str(d) + "/weights/24/SimpleRNN.ckpt"
-weight_load_path = str(d) + "/weights/SimpleRNN_augmented.ckpt"
+weight_load_path = str(d) + "/weights/28/SimpleRNN.ckpt"
 augment_path = data_path + "/augmented_data_yandex_0.csv"
 write_test_result_path = str(d) + "/weights/result.txt"
 sample_submission_path = str(d) + '/Data/sample_submission_null.csv'
@@ -108,25 +108,24 @@ model.fit(
 )
 
 # TEST MODEL PERFORMANCE:
-predictions_prob = model.predict(X_test, return_proba = True)
-
-predictions = (predictions_prob > OPTIMAL_THRESHOLD).astype(np.int32)
+predictions_prob = model.predict(X_test, threshold = OPTIMAL_THRESHOLD, return_proba = True)
+predictions = (predictions_prob > 0.5).astype(np.int32)
 acc = accuracy(predictions, y_test)
 cfs_mat = confusion_matrix(
     y_true = y_test.reshape(y_test.shape[0]),
     y_pred = predictions.reshape(predictions.shape[0])
-
 )
+
 roc_auc = roc_auc_score(
     y_true = y_test.reshape(y_test.shape[0]),
     y_score = predictions_prob.reshape(predictions_prob.shape[0])
 )
 
-write_predictions(
-    predictions_prob = predictions_prob,
-    sample_submission_path = sample_submission_path,
-    submission_path = submission_path
-)
+# write_predictions(
+#     predictions_prob = predictions_prob,
+#     sample_submission_path = sample_submission_path,
+#     submission_path = submission_path
+# )
 
 print()
 print("Test Accuracy:")
