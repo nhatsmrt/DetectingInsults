@@ -92,11 +92,11 @@ X_train, X_val, y_train, y_val = train_test_split(
 
 checkpoint = ModelCheckpoint(
     filepath = weight_save_path,
-    monitor = 'val_pairwise_loss', verbose = 1,
+    monitor = 'val_loss', verbose = 1,
     mode = 'min',
     save_best_only = True
 )
-early = EarlyStopping(monitor = "val_pairwise_loss", mode = "min", patience = 3)
+early = EarlyStopping(monitor = "val_loss", mode = "min", patience = 3)
 callbacks_list = [checkpoint, early]
 batch_size = 16
 epochs = 100

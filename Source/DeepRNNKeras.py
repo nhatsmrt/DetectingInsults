@@ -22,7 +22,7 @@ def RNNKeras(embeddingMatrix = None, embed_size = 100, max_features = 20000, max
     x = Dropout(0.1)(x)
     x = Dense(1, activation = "sigmoid")(x)
     model = Model(inputs = inp, outputs = x)
-    model.compile(loss = pairwise_loss, optimizer = 'adam', metrics = ['accuracy', pairwise_loss])
+    model.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
     return model
 
 def pairwise_loss(y_true, y_pred):
