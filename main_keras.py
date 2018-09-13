@@ -5,11 +5,11 @@ import re, os
 import nltk
 from nltk.corpus import stopwords
 from Source import\
-    SimpleRNN, BiRNN, StackedBiRNN, RNNKeras, AttentionalRNN, AttentionalBiRNN, Simple1DConvNet, \
+    RNNKeras, \
     accuracy, preprocess, find_threshold
-from skimage.filters import threshold_otsu
-from sklearn.metrics import confusion_matrix, roc_auc_score
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, confusion_matrix
 
 
 ## DEFINE PATHS:
@@ -19,11 +19,10 @@ data_path = str(d) + "/Data/"
 train_path = data_path + "train.csv"
 test_path = data_path + "test_with_solutions.csv"
 glove_path = os.path.join(data_path, "glove.6B.50d.txt")
-weight_save_path = str(d) + "/weights/SimpleRNN_augmented.ckpt"
-pretrained_weight_path = str(d) + "/weights/RNN_pretrained.ckpt"
+weight_save_path = str(d) + "/weights/weights_base.best.hdf5"
 # weight_load_path = str(d) + "/weights/model_stacked_birnn.ckpt"
 weight_load_path = None
-augment_path = data_path + "/augmented_data_yandex_0.csv"
+augment_path = data_path + "augmented_data_yandex_0.csv"
 
 RANDOM_STATE = 42
 
@@ -31,7 +30,7 @@ RANDOM_STATE = 42
 ## Adapt from https://damienpontifex.com/2017/10/27/using-pre-trained-glove-embeddings-in-tensorflow/
 PAD_TOKEN = 0
 embedding_weights = []
-word2idx = {'<pad>': PAD_TOKEN }
+word2idx = { '<pad>': PAD_TOKEN }
 with open(glove_path, 'r') as file:
     for ind, line in enumerate(file):
         values = line.split()
@@ -64,7 +63,7 @@ embedding_weights.append(np.random.rand(EMBEDDING_DIMENSION))
 embedding_weights = np.asarray(embedding_weights, dtype = np.float32)
 VOCAB_SIZE = embedding_weights.shape[0]
 
-# READ AND PREPROCESS DATA:
+## READ AND PREPROCESS DATA:
 ### Read csv files into pd dataframes:
 df_train = pd.read_csv(train_path)
 df_augmented = pd.read_csv(augment_path)
@@ -73,60 +72,54 @@ y = df_train["Insult"].values.reshape(-1, 1)
 y_augmented = np.append(
     y,
     df_augmented["Insult"].values.reshape(-1, 1),
-    axis = 0
-)
+    axis = 0)
 X_raw = df_train["Comment"].values
 X_augmented_raw = np.append(
     X_raw,
     df_augmented["Comment"].values,
     axis = 0
 )
-seq_len = 3000
-X_raw = preprocess(X_augmented_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
+seq_len = 500
+# X_train = preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
+X_processed = preprocess(X_raw, word2idx, UNKNOWN_TOKEN, seq_len, None)
 X_train, X_val, y_train, y_val = train_test_split(
-    X_raw,
-    y_augmented,
-    stratify = y_augmented,
-    train_size = 0.95,
-    random_state = RANDOM_STATE
+    X_processed,
+    y,
+    stratify = y,
+    test_size = 0.05,
+    random_state=RANDOM_STATE
 )
 
-# DEFINE AND TRAIN MODEL:
-model = SimpleRNN(
-    keep_prob = 0.5,
-    seq_len = seq_len,
-    embedding_matrix = embedding_weights,
+checkpoint = ModelCheckpoint(
+    filepath = weight_save_path,
+    monitor = 'val_loss', verbose = 1,
+    mode = 'min',
+    save_best_only = True
+)
+early = EarlyStopping(monitor = "val_loss", mode = "min", patience = 3)
+callbacks_list = [checkpoint, early]
+batch_size = 16
+epochs = 100
+
+model = RNNKeras(
+    embeddingMatrix = embedding_weights,
     embed_size = EMBEDDING_DIMENSION,
-    pretrained_weight_path = None
+    max_features = VOCAB_SIZE,
+    maxlen = seq_len
 )
-
 model.fit(
-    X_train,
-    y_train,
-    X_val,
-    y_val,
-    num_epochs = 100,
-    patience = 5,
-    weight_save_path = weight_save_path,
-    weight_load_path = None,
-    val_metric = 'roc-auc'
+    X_train, y_train,
+    batch_size = batch_size,
+    epochs = epochs,
+    validation_split = 0.1,
+    callbacks = callbacks_list,
+    validation_data = (X_val, y_val)
 )
 
-model.fit(
-    X_train,
-    y_train,
-    X_val,
-    y_val,
-    num_epochs = 0,
-    patience = 5,
-    weight_save_path = None,
-    weight_load_path = weight_save_path,
-    val_metric = 'roc-auc'
-)
+# FINAL VALIDATION:
+model.load_weights(filepath = weight_save_path)
+predictions_prob = model.predict(X_val)
 
-
-## VALIDATE MODEL PERFORMANCE:
-predictions_prob = model.predict(X_val, return_proba = True)
 optimal_threshold = find_threshold(predictions_prob, y_val)
 print("Optimal Threshold: ")
 print(optimal_threshold)
